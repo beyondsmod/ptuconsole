@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UUIOS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'os-bg': 'var(--os-bg, #0a0a0a)',
+                        'os-fg': 'var(--os-fg, #ffffff)',
+                        'os-window-bg': 'var(--os-window-bg, #2c2c2c)',
+                        'os-header-bg': 'var(--os-header-bg, #1a1a1a)',
+                        'os-accent': 'var(--os-accent, #007aff)',
+                        'os-dock': 'var(--os-dock, rgba(20, 20, 20, 0.85))',
+                        'traffic-red': '#ff5f56',
+                        'traffic-yellow': '#ffbd2e',
+                        'traffic-green': '#27c93f',
+                    },
+                    boxShadow: {
+                        'mac': '0 4px 12px rgba(0, 0, 0, 0.7)',
+                        'dock': '0 0 10px rgba(0, 0, 0, 0.5)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --os-bg: #0a0a0a;
+            --os-fg: #ffffff;
+            --os-window-bg: #2c2c2c;
+            --os-header-bg: #1a1a1a;
+            --os-accent: #007aff;
+            --os-dock: rgba(20, 20, 20, 0.85);
+        }
+        .light-mode {
+            --os-bg: #e0e0e0;
+            --os-fg: #1a1a1a;
+            --os-window-bg: #ffffff;
+            --os-header-bg: #f0f0f0;
+            --os-accent: #1976D2;
+            --os-dock: rgba(255, 255, 255, 0.85);
+        }
+        body {
+            background-color: var(--os-bg);
+            color: var(--os-fg);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+        }
+        .flat-button {
+            border: none;
+            background-color: var(--os-accent);
+            color: var(--os-fg);
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: none;
+            border-radius: 4px;
+        }
+        .window {
+            position: absolute;
+            min-width: 250px;
+            min-height: 180px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            border: 1px solid var(--os-header-bg);
+        }
+        .window-header {
+            cursor: move;
+            height: 30px;
+            background-color: var(--os-header-bg);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .window-content {
+            padding: 10px;
+            overflow: auto;
+            background-color: var(--os-window-bg);
+            flex-grow: 1;
+        }
+        .resize-handle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            z-index: 10;
+        }
+        .resize-handle.n { top: -4px; left: 50%; cursor: n-resize; }
+        .resize-handle.s { bottom: -4px; left: 50%; cursor: s-resize; }
+        .resize-handle.e { right: -4px; top: 50%; cursor: e-resize; }
+        .resize-handle.w { left: -4px; top: 50%; cursor: w-resize; }
+        .resize-handle.nw { top: -4px; left: -4px; cursor: nw-resize; }
+        .resize-handle.ne { top: -4px; right: -4px; cursor: ne-resize; }
+        .resize-handle.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+        .resize-handle.se { bottom: -4px; right: -4px; cursor: se-resize; }
+
+        .terminal-output {
+            background-color: #000000;
+            color: #00ff41;
+            min-height: 200px;
+            overflow-y: scroll;
+            padding: 5px;
+            font-family: monospace;
+            border: 1px solid rgba(0, 255, 65, 0.5);
+        }
+        .hidden-app {
+            display: none !important;
+        }
+        .traffic-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            cursor: pointer;
+            border: 1px solid rgba(0,0,0,0.2);
+            transition: none;
+        }
+        .traffic-light:active {
+            opacity: 0.7;
+        }
+        .dock-icon {
+            padding: 4px;
+            height: 48px;
+            width: 48px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--os-fg);
+            position: relative;
+            transition: none;
+        }
+        .dock-icon:hover {
+            transform: scale(1.1);
+        }
+        .dock-icon.active-app {
+            border: 2px solid var(--os-accent);
+        }
+        .icon-small {
+            height: 20px;
+            width: 20px;
+            flex-shrink: 0;
+        }
+        #context-menu {
+            position: fixed;
+            background-color: var(--os-window-bg);
+            border: 1px solid var(--os-header-bg);
+            border-radius: 6px;
+            padding: 4px 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 999;
+            min-width: 180px;
+            display: none;
+        }
+        .context-menu-item {
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: none;
+        }
+        .context-menu-item:hover {
+            background-color: var(--os-accent);
+            color: var(--os-fg);
+        }
+        .context-menu-separator {
+            height: 1px;
+            background-color: var(--os-header-bg);
+            margin: 4px 0;
+        }
+        .context-menu-sub-menu {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            margin-left: 4px;
+            display: none;
+            background-color: var(--os-window-bg);
+            border: 1px solid var(--os-header-bg);
+            border-radius: 6px;
+            padding: 4px 0;
+            min-width: 150px;
+        }
+        .context-menu-item:hover > .context-menu-sub-menu {
+            display: block;
+        }
+
+        /* Збільшення розміру контейнера іконок */
+        .desktop-icon-entry {
+            width: 80px;
+            height: 90px;
+            padding: 4px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: none;
+            position: absolute; 
+            user-select: none;
+            z-index: 10; 
+        }
+        /* Збільшення розміру самої іконки */
+        .desktop-icon-entry i {
+            font-size: 40px; 
+            margin-bottom: 4px;
+        }
+        .desktop-icon-entry.hover-highlight {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .desktop-icon-entry span.icon-name, .desktop-icon-entry input {
+            font-size: 0.7rem;
+            max-width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            padding: 0 2px;
+            line-height: 1.2;
+            background: transparent;
+            color: inherit;
+            border: none;
+            text-align: center;
+        }
+        .desktop-icon-entry input.renaming {
+            background-color: var(--os-window-bg);
+            border: 1px solid var(--os-accent);
+            padding: 0 2px;
+            outline: none;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <div id="boot-screen" class="absolute inset-0 bg-black flex flex-col items-center justify-center z-[1000]">
+        <h1 class="text-white text-3xl mb-4">UUIOS Booting...</h1>
+        <div class="w-1/4 h-1 bg-gray-700 rounded">
+            <div id="loading-bar" class="h-full bg-os-accent w-0 rounded"></div>
+        </div>
+        <p class="text-gray-400 mt-4">Preparing desktop environment...</p>
+    </div>
+
+    <div id="lock-screen" class="absolute inset-0 flex flex-col items-center justify-center z-[900] hidden">
+        <div class="text-white text-7xl mb-4" id="lock-time">10:00 PM</div>
+        <div class="text-gray-400 text-2xl mb-12">Friday, November 8</div>
+        <button id="login-button" class="flat-button text-lg px-8 py-3 rounded-md">Log In</button>
+    </div>
+
+    <div id="desktop-env" class="flex-grow relative hidden">
+        <div id="desktop-icons-container" class="absolute inset-0 p-2">
+        </div>
+        <div id="window-container" class="absolute inset-0">
+        </div>
+    </div>
+
+    <div id="taskbar" class="w-max h-16 flex items-center justify-center px-4 py-2 z-50 fixed bottom-2 left-1/2 transform -translate-x-1/2 rounded-xl shadow-dock hidden" style="background-color: var(--os-dock); backdrop-filter: blur(10px);">
+        <div class="flex items-center space-x-3">
+            <button id="launchpad-button" class="dock-icon bg-gray-700" onclick="toggleStartMenu()" title="Launchpad">
+                <i class="fas fa-th-large text-white"></i>
+            </button>
+            <div id="running-apps" class="flex space-x-3">
+            </div>
+            <div class="h-8 w-px bg-white opacity-20"></div>
+            <div class="flex space-x-3">
+                <button class="dock-icon bg-gray-700 icon-small" onclick="openApp('FileExplorer')">
+                    <i class="fas fa-folder text-os-accent"></i>
+                </button>
+                <button class="dock-icon bg-gray-700 icon-small" onclick="openApp('Terminal')">
+                    <i class="fas fa-terminal text-white"></i>
+                </button>
+                <button class="dock-icon bg-gray-700 icon-small" onclick="openApp('Settings')">
+                    <i class="fas fa-sliders-h text-white"></i>
+                </button>
+                <button class="dock-icon bg-gray-700 icon-small" onclick="openApp('Calculator')">
+                    <i class="fas fa-calculator text-white"></i>
+                </button>
+                <button class="dock-icon bg-gray-700 icon-small" onclick="openApp('Notes')">
+                    <i class="fas fa-sticky-note text-yellow-500"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-menu" class="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-64 p-4 z-50 hidden rounded-xl shadow-mac" style="background-color: var(--os-window-bg); border: 1px solid var(--os-accent);">
+        <div class="text-sm font-semibold mb-3">Launchpad</div>
+        <div class="grid grid-cols-3 gap-3">
+            <button class="flex flex-col items-center p-2 rounded-md hover:bg-os-header-bg" onclick="openApp('FileExplorer')">
+                <i class="fas fa-folder text-3xl text-os-accent mb-1"></i>
+                <span class="text-xs">Finder</span>
+            </button>
+            <button class="flex flex-col items-center p-2 rounded-md hover:bg-os-header-bg" onclick="openApp('Terminal')">
+                <i class="fas fa-terminal text-3xl text-white mb-1"></i>
+                <span class="text-xs">Terminal</span>
+            </button>
+            <button class="flex flex-col items-center p-2 rounded-md hover:bg-os-header-bg" onclick="openApp('Settings')">
+                <i class="fas fa-sliders-h text-3xl text-white mb-1"></i>
+                <span class="text-xs">Settings</span>
+            </button>
+            <button class="flex flex-col items-center p-2 rounded-md hover:bg-os-header-bg" onclick="openApp('Calculator')">
+                <i class="fas fa-calculator text-3xl text-white mb-1"></i>
+                <span class="text-xs">Calc</span>
+            </button>
+            <button class="flex flex-col items-center p-2 rounded-md hover:bg-os-header-bg" onclick="openApp('Notes')">
+                <i class="fas fa-sticky-note text-3xl text-yellow-500 mb-1"></i>
+                <span class="text-xs">Notes</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="context-menu">
+        <div class="context-menu-item" id="context-menu-open" style="display: none;" onclick="contextOpenFile()">
+            <i class="fas fa-external-link-alt w-4"></i> <span>Open</span>
+        </div>
+        <div class="context-menu-item" id="context-menu-edit" style="display: none;" onclick="contextEditFile()">
+            <i class="fas fa-edit w-4"></i> <span>Edit</span>
+        </div>
+        <div class="context-menu-separator" id="separator-1" style="display: none;"></div>
+        
+        <div class="context-menu-item" id="context-menu-new-folder" style="display: none;" onclick="createFileEntry('Folder', 'New Folder')">
+            <i class="fas fa-folder w-4 text-os-accent"></i> <span>New Folder</span>
+        </div>
+        <div class="context-menu-item" id="context-menu-new-file" style="display: none;">
+            <i class="fas fa-file w-4 text-gray-400"></i> <span>New File</span>
+            <i class="fas fa-caret-right ml-auto"></i>
+            <div class="context-menu-sub-menu" id="new-file-submenu">
+                <div class="context-menu-item" onclick="createFileEntry('File', 'New Text File.txt', '')">
+                    <i class="fas fa-file-alt w-4 text-yellow-500"></i> <span>Text File (.txt)</span>
+                </div>
+                <div class="context-menu-item" onclick="createFileEntry('File', 'script.ts', 'echo Hello from script\\nls\\necho Done!')">
+                    <i class="fas fa-terminal w-4 text-red-500"></i> <span>Terminal Script (.ts)</span>
+                </div>
+            </div>
+        </div>
+        <div class="context-menu-separator" id="separator-2"></div> 
+        
+        <div class="context-menu-item" id="context-menu-rename" style="display: none;" onclick="contextRenameFile()">
+            <i class="fas fa-i-cursor w-4"></i> <span>Rename</span>
+        </div>
+        <div class="context-menu-item" id="context-menu-delete" style="display: none;" onclick="contextDeleteFile()">
+            <i class="fas fa-trash-alt w-4 text-red-500"></i> <span>Delete</span>
+        </div>
+        <div class="context-menu-separator" id="separator-3" style="display: none;"></div> 
+        <div class="context-menu-item" id="context-menu-properties" style="display: none;" onclick="contextProperties()">
+            <i class="fas fa-info-circle w-4"></i> <span>Properties</span>
+        </div>
+    </div>
+
+    <script>
+        const fileSystem = {
+            'C:': { 
+                'Applications': {
+                    'Utilities': {
+                        'Terminal.app': 'Executable file for command line interface.',
+                        'Disk Utility.app': 'System tool.'
+                    },
+                    'Safari.app': 'Web Browser Application.',
+                    'Finder.app': 'File Manager Application.'
+                },
+                'Users': {
+                    'guest_user': {
+                        'Desktop': {
+                            'UUIOS_Notes.txt': 'A reminder about the new OS name.',
+                            'Project_Files': {
+                                'README.md': 'Markdown file.',
+                                'Assets': {}
+                            }
+                        },
+                        'Documents': {
+                            'Work': {
+                                'Report_2024.docx': 'Draft report.',
+                                'Archives': {}
+                            },
+                            'Images': {
+                                'Vacation': {
+                                    'image01.jpg': 'JPEG file'
+                                }
+                            }
+                        },
+                        'Downloads': {
+                            'install.dmg': 'Disk image file'
+                        }
+                    },
+                    'shared_user': {}
+                },
+                'System': {
+                    _protected: true,
+                    'Kernel': {
+                        'core_v1.0.bin': 'Binary kernel file'
+                    },
+                    'Library': {
+                        'Extensions': {
+                            'net_driver.kext': 'Network extension'
+                        },
+                        'Logs': {
+                            'boot.log': 'Log file'
+                        }
+                    },
+                    'Configurations': {
+                        'settings.conf': 'System config'
+                    }
+                }
+            }
+        };
+
+        const desktopPath = ['C:', 'Users', 'guest_user', 'Desktop'];
+        let currentPath = [...desktopPath];
+        let zIndexCounter = 100;
+        const openWindows = {};
+        let selectedFileForContext = null;
+        let contextMenuX = 100;
+        let contextMenuY = 100;
+        let isSystemCrashed = false;
+
+        function getCurrentDir(pathArray) {
+            let dir = fileSystem;
+            for (const key of pathArray) {
+                if (dir[key] !== undefined) {
+                    dir = dir[key];
+                } else {
+                    return null;
+                }
+            }
+            return dir;
+        }
+
+        function getFullPath(fileName) {
+            return desktopPath.join('\\') + '\\' + fileName;
+        }
+
+        const desktopDir = getCurrentDir(desktopPath);
+        if (desktopDir && !desktopDir._layout) {
+            desktopDir._layout = {
+                'UUIOS_Notes.txt': { top: '20px', left: '20px' },
+                'Project_Files': { top: '120px', left: '20px' },
+            };
+        }
+
+        function showScreen(id) {
+            document.getElementById('boot-screen').classList.add('hidden');
+            document.getElementById('lock-screen').classList.add('hidden');
+            document.getElementById('desktop-env').classList.add('hidden');
+            document.getElementById('taskbar').classList.add('hidden');
+
+            const screen = document.getElementById(id);
+            if (screen) {
+                screen.classList.remove('hidden');
+                if (id === 'desktop-env') {
+                    document.getElementById('taskbar').classList.remove('hidden');
+                    renderDesktopIcons();
+                }
+            }
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+            if (document.getElementById('lock-time')) document.getElementById('lock-time').textContent = timeStr;
+            if (document.getElementById('lock-screen').classList.contains('hidden')) {
+                document.getElementById('lock-time').textContent = timeStr;
+                document.getElementById('lock-time').nextElementSibling.textContent = dateStr;
+            }
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('light-mode');
+        }
+
+        function renderWindow(appName, iconClass, contentHtml) {
+            const existingWindow = document.getElementById(`window-${appName}`);
+            if (existingWindow) {
+                if (existingWindow.classList.contains('hidden-app')) {
+                    existingWindow.classList.remove('hidden-app');
+                }
+                focusWindow(existingWindow);
+                return;
+            }
+
+            const windowElement = document.createElement('div');
+            windowElement.id = `window-${appName}`;
+            windowElement.classList.add('window', 'flex', 'flex-col');
+            windowElement.style.width = '600px';
+            windowElement.style.height = '400px';
+            windowElement.style.top = `${50 + Math.random() * 50}px`;
+            windowElement.style.left = `${50 + Math.random() * 50}px`;
+            windowElement.style.zIndex = ++zIndexCounter;
+            windowElement.dataset.appName = appName;
+
+            const header = document.createElement('div');
+            header.classList.add('window-header', 'flex', 'items-center', 'px-2', 'py-1');
+            
+            let trafficLights = `
+                <div class="flex items-center space-x-2">
+                    <div class="traffic-light bg-traffic-red" onclick="closeWindow('${appName}', event)" title="Close"></div>
+                    <div class="traffic-light bg-traffic-yellow" onclick="minimizeWindow('${appName}', event)" title="Minimize"></div>
+                    <div class="traffic-light bg-traffic-green" onclick="maximizeWindow('${appName}', event)" title="Maximize/Restore"></div>
+                </div>
+            `;
+            
+            header.innerHTML = trafficLights + `<span class="text-xs font-semibold flex-grow text-center">${appName}</span>`;
+
+            const content = document.createElement('div');
+            content.classList.add('window-content', 'flex-grow');
+            content.innerHTML = contentHtml;
+
+            windowElement.appendChild(header);
+            windowElement.appendChild(content);
+
+            const handles = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
+            handles.forEach(dir => {
+                const handle = document.createElement('div');
+                handle.classList.add('resize-handle', dir);
+                windowElement.appendChild(handle);
+            });
+
+            document.getElementById('window-container').appendChild(windowElement);
+            attachDrag(windowElement, header);
+            attachResize(windowElement);
+            openWindows[appName] = windowElement;
+            
+            if (!appName.startsWith('FileEditor:')) {
+                updateTaskbar(appName, iconClass, true);
+            }
+            
+            windowElement.addEventListener('mousedown', () => focusWindow(windowElement));
+            
+            if (appName === 'FileExplorer') {
+                renderFileExplorerContent();
+            } else if (appName === 'Terminal') {
+                document.getElementById('terminal-input').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        handleTerminalCommand(e.target.value);
+                        e.target.value = '';
+                    }
+                });
+            } else if (appName.startsWith('FileEditor:')) {
+                const fileName = appName.split(':')[1];
+                const fileDir = getCurrentDir(desktopPath);
+                const fileContent = fileDir[fileName];
+                const textarea = windowElement.querySelector('textarea');
+                const saveButton = windowElement.querySelector('.flat-button');
+                
+                textarea.value = fileContent || '';
+
+                saveButton.onclick = () => {
+                    fileDir[fileName] = textarea.value;
+                    closeWindow(appName);
+                    renderDesktopIcons();
+                    renderFileExplorerContent();
+                };
+            }
+            focusWindow(windowElement);
+        }
+
+        function renderPropertiesWindow(fileName) {
+            const appName = `Properties:${fileName}`;
+            const existingWindow = document.getElementById(`window-${appName}`);
+            if (existingWindow) {
+                if (existingWindow.classList.contains('hidden-app')) {
+                    existingWindow.classList.remove('hidden-app');
+                }
+                focusWindow(existingWindow);
+                return;
+            }
+
+            const currentDir = getCurrentDir(desktopPath);
+            const content = currentDir[fileName];
+            const isFolder = typeof content === 'object';
+            
+            let type;
+            if (isFolder) {
+                type = 'Folder';
+            } else {
+                const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+                switch (ext) {
+                    case 'txt':
+                    case 'md':
+                        type = 'Text File';
+                        break;
+                    case 'ts':
+                        type = 'Terminal Script File';
+                        break;
+                    case 'app':
+                        type = 'Application';
+                        break;
+                    case 'docx':
+                        type = 'Microsoft Word Document';
+                        break;
+                    case 'jpg':
+                        type = 'JPEG Image';
+                        break;
+                    case 'dmg':
+                        type = 'Disk Image';
+                        break;
+                    case 'bin':
+                        type = 'Binary Kernel File';
+                        break;
+                    case 'kext':
+                        type = 'Kernel Extension';
+                        break;
+                    case 'conf':
+                        type = 'Configuration File';
+                        break;
+                    case 'log':
+                        type = 'Log File';
+                        break;
+                    default:
+                        type = ext.toUpperCase() + ' File';
+                }
+            }
+
+            const size = isFolder 
+                ? `${Object.keys(content).length - (content._layout ? 1 : 0) - (content._protected ? 1 : 0)} items` 
+                : `${(content.length || 0)} characters`;
+            
+            const contentHtml = `
+                <div class="space-y-3 p-4 text-sm">
+                    <p><strong>Name:</strong> ${fileName}</p>
+                    <p><strong>Location:</strong> ${desktopPath.join('\\')}</p>
+                    <p><strong>Type:</strong> ${type}</p>
+                    <p><strong>Contents/Size:</strong> ${size}</p>
+                </div>
+            `;
+
+            const windowElement = document.createElement('div');
+            windowElement.id = `window-${appName}`;
+            windowElement.classList.add('window', 'flex', 'flex-col');
+            windowElement.style.width = '350px';
+            windowElement.style.height = '200px';
+            windowElement.style.top = `${150 + Math.random() * 50}px`;
+            windowElement.style.left = `${150 + Math.random() * 50}px`;
+            windowElement.style.zIndex = ++zIndexCounter;
+            windowElement.dataset.appName = appName;
+
+            const header = document.createElement('div');
+            header.classList.add('window-header', 'flex', 'items-center', 'px-2', 'py-1');
+            
+            let trafficLights = `
+                <div class="flex items-center space-x-2">
+                    <div class="traffic-light bg-traffic-red" onclick="closeWindow('${appName}', event)" title="Close"></div>
+                    <div class="traffic-light bg-traffic-green" onclick="maximizeWindow('${appName}', event)" title="Maximize/Restore"></div>
+                </div>
+            `;
+            
+            header.innerHTML = trafficLights + `<span class="text-xs font-semibold flex-grow text-center">Properties: ${fileName}</span>`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('window-content', 'flex-grow');
+            contentDiv.innerHTML = contentHtml;
+
+            windowElement.appendChild(header);
+            windowElement.appendChild(contentDiv);
+
+            const handles = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
+            handles.forEach(dir => {
+                const handle = document.createElement('div');
+                handle.classList.add('resize-handle', dir);
+                windowElement.appendChild(handle);
+            });
+
+            document.getElementById('window-container').appendChild(windowElement);
+            attachDrag(windowElement, header);
+            attachResize(windowElement);
+            openWindows[appName] = windowElement;
+            
+            focusWindow(windowElement);
+        }
+
+        function focusWindow(windowElement) {
+            zIndexCounter++;
+            windowElement.style.zIndex = zIndexCounter;
+            const appName = windowElement.dataset.appName;
+            document.querySelectorAll('#running-apps button').forEach(btn => {
+                btn.classList.remove('active-app');
+            });
+            const taskbarBtn = document.getElementById(`taskbar-btn-${appName}`);
+            if (taskbarBtn) {
+                taskbarBtn.classList.add('active-app');
+            }
+        }
+
+        function minimizeWindow(appName, e) {
+            if (e) e.stopPropagation();
+            const win = document.getElementById(`window-${appName}`);
+            if (win) {
+                win.classList.toggle('hidden-app');
+            }
+        }
+
+        function maximizeWindow(appName, e) {
+            if (e) e.stopPropagation();
+            const win = document.getElementById(`window-${appName}`);
+            if (!win) return;
+
+            const isMaximized = win.dataset.maximized === 'true';
+            const restoreProps = win.dataset.restoreProps ? JSON.parse(win.dataset.restoreProps) : null;
+
+            if (!isMaximized) {
+                win.dataset.restoreProps = JSON.stringify({
+                    top: win.style.top,
+                    left: win.style.left,
+                    width: win.style.width,
+                    height: win.style.height
+                });
+                win.style.top = '0px';
+                win.style.left = '0px';
+                win.style.width = '100%';
+                win.style.height = 'calc(100vh - 40px)';
+                win.dataset.maximized = 'true';
+                win.style.borderRadius = '0';
+            } else if (restoreProps) {
+                win.style.top = restoreProps.top;
+                win.style.left = restoreProps.left;
+                win.style.width = restoreProps.width;
+                win.style.height = restoreProps.height;
+                win.dataset.maximized = 'false';
+                win.style.borderRadius = '8px';
+            }
+        }
+
+        function closeWindow(appName, e) {
+            if (e) e.stopPropagation();
+            const win = document.getElementById(`window-${appName}`);
+            if (win) {
+                win.remove();
+                delete openWindows[appName];
+                
+                if (!appName.startsWith('FileEditor:') && !appName.startsWith('Properties:')) {
+                    updateTaskbar(appName, '', false);
+                }
+                
+                if (document.getElementById('desktop-icons-container')) {
+                    renderDesktopIcons();
+                }
+            }
+        }
+
+        function openApp(appName, fileName = null) {
+            document.getElementById('start-menu').classList.add('hidden');
+            let icon, content;
+            let existing = document.getElementById(`window-${appName}`);
+            
+            if (fileName) {
+                const fileContent = getCurrentDir(desktopPath)[fileName];
+                if (typeof fileContent === 'object') {
+                    if (currentPath.join('/') !== desktopPath.join('/')) {
+                        currentPath = [...desktopPath];
+                    }
+                    openApp('FileExplorer');
+                    changeDirectory(fileName);
+                    return;
+                }
+                
+                const fullPath = getFullPath(fileName);
+                handleTerminalCommand(`start "${fullPath}"`);
+                return;
+            }
+
+            if (existing) {
+                if (existing.classList.contains('hidden-app')) {
+                    existing.classList.remove('hidden-app');
+                }
+                focusWindow(existing);
+                return;
+            }
+
+            switch (appName) {
+                case 'FileExplorer':
+                    icon = 'fas fa-folder text-os-accent';
+                    content = `
+                        <div class="h-full flex flex-col">
+                            <div class="flex items-center space-x-2 mb-2 p-2 border-b border-os-header-bg">
+                                <button id="fe-up-btn" class="flat-button py-1 px-2 text-sm rounded-md" onclick="goUpDirectory()"><i class="fas fa-arrow-up"></i> Up</button>
+                                <div id="current-path" class="p-1 border border-os-accent flex-grow text-xs rounded-md" style="background-color: var(--os-header-bg);"></div>
+                            </div>
+                            <div id="file-list" class="flex-grow p-2 overflow-y-scroll text-sm"></div>
+                        </div>
+                    `;
+                    break;
+                case 'Terminal':
+                    icon = 'fas fa-terminal';
+                    content = `
+                        <div class="h-full flex flex-col">
+                            <div id="terminal-output" class="terminal-output flex-grow mb-2 rounded-md">
+                                UUIOS Terminal. Type 'help' for commands.<br>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="mr-2 text-[#00ff41]">guest_user@uuios:~$</span>
+                                <input id="terminal-input" type="text" class="flex-grow bg-black text-[#00ff41] border-none outline-none p-1 font-mono" style="caret-color: #00ff41;">
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'Settings':
+                    icon = 'fas fa-sliders-h';
+                    content = `
+                        <div class="space-y-4 p-4">
+                            <h2 class="text-xl font-semibold border-b border-os-header-bg pb-2">Appearance</h2>
+                            <label class="flex items-center justify-between p-2 rounded-md hover:bg-os-header-bg cursor-pointer">
+                                <span class="text-os-fg text-sm">Light Mode (Toggle)</span>
+                                <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()" class="h-4 w-4 rounded-full border border-os-accent bg-os-window-bg checked:bg-os-accent appearance-none transition-none">
+                            </label>
+
+                            <h2 class="text-xl font-semibold border-b border-os-header-bg pb-2">About UUIOS</h2>
+                            <p class="text-xs">UUIOS Simulation v1.0</p>
+                        </div>
+                    `;
+                    break;
+                case 'Calculator':
+                    icon = 'fas fa-calculator';
+                    content = `
+                        <div class="grid grid-cols-4 gap-2 p-4 bg-os-header-bg h-full">
+                            <input type="text" id="calc-display" value="0" readonly class="col-span-4 h-12 text-right text-3xl p-2 bg-gray-900 text-white rounded-lg border-2 border-os-accent mb-2">
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-500" onclick="calcAction('C')">C</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-os-accent" onclick="calcAction('/')">/</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-os-accent" onclick="calcAction('*')">*</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-os-accent" onclick="calcAction('-')">-</button>
+
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('7')">7</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('8')">8</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('9')">9</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-os-accent" onclick="calcAction('+')">+</button>
+
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('4')">4</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('5')">5</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('6')">6</button>
+                            <button class="calc-btn flat-button row-span-2 p-4 text-xl rounded-lg bg-os-accent" onclick="calcAction('=')">=</button>
+
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('1')">1</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('2')">2</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('3')">3</button>
+
+                            <button class="calc-btn flat-button col-span-2 p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('0')">0</button>
+                            <button class="calc-btn flat-button p-4 text-xl rounded-lg bg-gray-700" onclick="calcAction('.')">.</button>
+                        </div>
+                    `;
+                    break;
+                case 'Notes':
+                    icon = 'fas fa-sticky-note text-yellow-500';
+                    content = `
+                        <textarea class="w-full h-full p-3 border border-os-accent bg-os-header-bg text-os-fg rounded-md outline-none text-sm resize-none" placeholder="Jot down quick thoughts..."></textarea>
+                    `;
+                    break;
+                default:
+                    return;
+            }
+
+            renderWindow(appName, icon, content);
+        }
+
+        function openFileEditor(fileName) {
+            const appName = `FileEditor:${fileName}`;
+            const icon = 'fas fa-file-alt';
+            
+            const existingWindow = document.getElementById(`window-${appName}`);
+            if (existingWindow) {
+                if (existingWindow.classList.contains('hidden-app')) {
+                    existingWindow.classList.remove('hidden-app');
+                }
+                focusWindow(existingWindow);
+                return;
+            }
+
+            const content = `
+                <div class="h-full flex flex-col">
+                    <textarea class="flex-grow w-full p-3 border border-os-accent bg-os-header-bg text-os-fg rounded-t-md outline-none text-sm resize-none"></textarea>
+                    <div class="p-2 flex justify-end">
+                        <button class="flat-button py-1 px-3 rounded-md">Save & Close</button>
+                    </div>
+                </div>
+            `;
+            renderWindow(appName, icon, content);
+        }
+
+        function attachDrag(elmnt, header) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            header.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                if (e.target.classList.contains('traffic-light')) return;
+                e = e || window.event;
+                e.preventDefault();
+                focusWindow(elmnt);
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                if (elmnt.dataset.maximized === 'true') return;
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        function attachDesktopIconDrag(elmnt) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            const fileName = elmnt.dataset.fileName;
+
+            elmnt.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                if (e.button === 2) return;
+                
+                e = e || window.event;
+                e.preventDefault();
+                
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+                
+                elmnt.style.zIndex = zIndexCounter + 1;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                
+                const container = document.getElementById('desktop-icons-container');
+                const maxTop = container.clientHeight - elmnt.offsetHeight;
+                const maxLeft = container.clientWidth - elmnt.offsetWidth;
+                
+                let newTop = (elmnt.offsetTop - pos2);
+                let newLeft = (elmnt.offsetLeft - pos1);
+                
+                newTop = Math.min(maxTop, Math.max(0, newTop));
+                newLeft = Math.min(maxLeft, Math.max(0, newLeft));
+
+                elmnt.style.top = newTop + "px";
+                elmnt.style.left = newLeft + "px";
+            }
+
+            function saveIconPosition(fileName, top, left) {
+                const desktopLayout = getCurrentDir(desktopPath)._layout;
+                if (desktopLayout) {
+                    desktopLayout[fileName] = { top: top, left: left };
+                }
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                
+                saveIconPosition(fileName, elmnt.style.top, elmnt.style.left);
+                
+                elmnt.style.zIndex = 10;
+            }
+        }
+
+        function attachResize(elmnt) {
+            elmnt.querySelectorAll('.resize-handle').forEach(handle => {
+                handle.onmousedown = resizeMouseDown;
+            });
+
+            function resizeMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                if (elmnt.dataset.maximized === 'true') return;
+                
+                let startX = e.clientX;
+                let startY = e.clientY;
+                let startW = elmnt.offsetWidth;
+                let startH = elmnt.offsetHeight;
+                let startL = elmnt.offsetLeft;
+                let startT = elmnt.offsetTop;
+                let direction = e.target.classList[1];
+
+                document.onmouseup = closeResizeElement;
+                document.onmousemove = (e) => elementResize(e, direction, startX, startY, startW, startH, startL, startT);
+            }
+
+            function elementResize(e, direction, startX, startY, startW, startH, startL, startT) {
+                e.preventDefault();
+                const minW = 250, minH = 180;
+                let newW = startW, newH = startH, newL = startL, newT = startT;
+
+                if (direction.includes('e')) {
+                    newW = Math.max(minW, startW + (e.clientX - startX));
+                }
+                if (direction.includes('s')) {
+                    newH = Math.max(minH, startH + (e.clientY - startY));
+                }
+                if (direction.includes('w')) {
+                    const diffX = e.clientX - startX;
+                    newW = Math.max(minW, startW - diffX);
+                    if (newW > minW) newL = startL + diffX;
+                }
+                if (direction.includes('n')) {
+                    const diffY = e.clientY - startY;
+                    newH = Math.max(minH, startH - diffY);
+                    if (newH > minH) newT = startT + diffY;
+                }
+
+                if (newW !== startW) elmnt.style.width = newW + 'px';
+                if (newH !== startH) {
+                    elmnt.style.height = newH + 'px';
+                    elmnt.querySelector('.window-content').style.height = `calc(100% - 31px)`;
+                }
+                if (newL !== startL) elmnt.style.left = newL + 'px';
+                if (newT !== startT) elmnt.style.top = newT + 'px';
+            }
+
+            function closeResizeElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        function updateTaskbar(appName, iconClass, isOpening) {
+            const container = document.getElementById('running-apps');
+            const existingBtn = document.getElementById(`taskbar-btn-${appName}`);
+
+            if (isOpening) {
+                if (!existingBtn) {
+                    const btn = document.createElement('button');
+                    btn.id = `taskbar-btn-${appName}`;
+                    btn.classList.add('dock-icon', 'bg-os-accent', 'icon-small', 'active-app');
+                    btn.innerHTML = `<i class="${iconClass}"></i>`;
+                    btn.title = appName;
+                    btn.onclick = () => {
+                        const win = document.getElementById(`window-${appName}`);
+                        if (win.classList.contains('hidden-app')) {
+                            win.classList.remove('hidden-app');
+                        }
+                        focusWindow(win);
+                    };
+                    container.appendChild(btn);
+                }
+            } else {
+                if (existingBtn) {
+                    existingBtn.remove();
+                }
+            }
+        }
+
+        function toggleStartMenu() {
+            document.getElementById('start-menu').classList.toggle('hidden');
+        }
+
+        function getFileIcon(name, content) {
+            const isFolder = typeof content === 'object' && name !== '_layout' && name !== '_protected';
+            if (isFolder) return 'fas fa-folder text-os-accent';
+            
+            if (name.endsWith('.app')) return 'fas fa-cogs text-os-accent';
+            if (name.endsWith('.txt')) return 'fas fa-file-alt text-yellow-500';
+            if (name.endsWith('.md')) return 'fas fa-file-alt text-yellow-500';
+            if (name.endsWith('.ts')) return 'fas fa-terminal text-red-500';
+            if (name.endsWith('.docx')) return 'fas fa-file-word text-blue-500';
+            if (name.endsWith('.jpg')) return 'fas fa-image text-purple-500';
+            if (name.endsWith('.dmg')) return 'fas fa-hdd text-gray-500';
+            if (name.endsWith('.bin')) return 'fas fa-microchip text-gray-700';
+            if (name.endsWith('.kext')) return 'fas fa-plug text-gray-500';
+            if (name.endsWith('.conf')) return 'fas fa-cog text-blue-400';
+            if (name.endsWith('.log')) return 'fas fa-scroll text-brown-500';
+            return 'fas fa-file text-gray-400';
+        }
+
+        function renderDesktopIcons() {
+            const container = document.getElementById('desktop-icons-container');
+            if (!container || currentPath.join('/') !== desktopPath.join('/')) return;
+
+            const currentDir = getCurrentDir(desktopPath);
+            container.innerHTML = '';
+            selectedFileForContext = null; 
+
+            if (!currentDir || typeof currentDir !== 'object') return;
+
+            const entries = Object.entries(currentDir)
+                .filter(([name]) => name !== '_layout' && name !== '_protected') 
+                .sort(([nameA, contentA], [nameB, contentB]) => {
+                const isFolderA = typeof contentA === 'object';
+                const isFolderB = typeof contentB === 'object';
+                if (isFolderA && !isFolderB) return -1;
+                if (!isFolderA && isFolderB) return 1;
+                return nameA.localeCompare(nameB);
+            });
+
+            const layout = currentDir._layout || {};
+
+            for (const [name, content] of entries) {
+                const icon = getFileIcon(name, content);
+
+                const item = document.createElement('div');
+                item.classList.add('desktop-icon-entry');
+                item.dataset.fileName = name;
+                item.dataset.isFolder = typeof content === 'object';
+                item.id = `desktop-icon-${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+                const pos = layout[name];
+
+                if (pos) {
+                    item.style.top = pos.top;
+                    item.style.left = pos.left;
+                } else {
+                    let existingIconsCount = document.querySelectorAll('.desktop-icon-entry').length;
+                    let defaultTop = 20 + (existingIconsCount % 8) * 90; // 90px height
+                    let defaultLeft = 20 + Math.floor(existingIconsCount / 8) * 90; // 90px width
+
+                    item.style.top = `${defaultTop}px`; 
+                    item.style.left = `${defaultLeft}px`;
+                    layout[name] = { top: item.style.top, left: item.style.left };
+                }
+
+                item.innerHTML = `
+                    <i class="${icon}"></i>
+                    <span class="icon-name">${name}</span>
+                `;
+
+                item.ondblclick = () => contextOpenFile();
+                
+                item.onmouseenter = () => {
+                    if (selectedFileForContext !== name) {
+                        item.classList.add('hover-highlight');
+                    }
+                };
+                item.onmouseleave = () => {
+                    item.classList.remove('hover-highlight');
+                };
+
+                item.onmousedown = (e) => {
+                    if (e.button === 2) return;
+                    document.querySelectorAll('.desktop-icon-entry').forEach(el => {
+                        el.style.backgroundColor = 'transparent';
+                        el.classList.remove('hover-highlight');
+                    });
+                    selectedFileForContext = name;
+                    item.style.backgroundColor = 'rgba(0, 122, 255, 0.5)';
+                    item.classList.remove('hover-highlight');
+                    e.stopPropagation();
+                };
+
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); 
+                    showContextMenu(e, item);
+                });
+
+                container.appendChild(item);
+                
+                attachDesktopIconDrag(item); 
+            }
+        }
+        
+        function renderFileExplorerContent() {
+            const list = document.getElementById('file-list');
+            const pathDisplay = document.getElementById('current-path');
+            if (!list || !pathDisplay) return;
+
+            const currentDir = getCurrentDir(currentPath);
+            pathDisplay.textContent = currentPath.join('\\');
+            list.innerHTML = '';
+            selectedFileForContext = null;
+
+            if (!currentDir || typeof currentDir !== 'object') {
+                list.innerHTML = '<p class="text-red-500 text-sm">Error: Directory not found or is a file.</p>';
+                return;
+            }
+
+            const entries = Object.entries(currentDir)
+                .filter(([name]) => name !== '_layout' && name !== '_protected')
+                .sort(([nameA, contentA], [nameB, contentB]) => {
+                const isFolderA = typeof contentA === 'object';
+                const isFolderB = typeof contentB === 'object';
+                if (isFolderA && !isFolderB) return -1;
+                if (!isFolderA && isFolderB) return 1;
+                return nameA.localeCompare(nameB);
+            });
+
+            for (const [name, content] of entries) {
+                const icon = getFileIcon(name, content);
+
+                const item = document.createElement('div');
+                item.classList.add('file-entry', 'flex', 'items-center', 'py-1', 'px-2', 'cursor-pointer', 'text-sm', 'rounded-sm', 'hover:bg-os-header-bg');
+                item.innerHTML = `<i class="${icon} mr-3 w-4 text-center flex-shrink-0"></i> <span>${name}</span>`;
+                item.dataset.fileName = name;
+
+                if (typeof content === 'object') {
+                    item.ondblclick = () => changeDirectory(name);
+                } else {
+                    item.ondblclick = () => handleTerminalCommand(`start "${currentPath.join('\\')}\\${name}"`);
+                    item.title = `File type: ${name.includes('.') ? name.split('.').pop() : 'none'}`;
+                }
+                list.appendChild(item);
+            }
+
+            document.getElementById('fe-up-btn').disabled = currentPath.length <= 1;
+        }
+
+        function changeDirectory(folderName) {
+            const newPath = [...currentPath, folderName];
+            const target = getCurrentDir(newPath);
+            if (target && typeof target === 'object') {
+                currentPath = newPath;
+                renderFileExplorerContent();
+            } else {
+                alertMessage('Finder Error', `Cannot open "${folderName}": Directory not found.`, 3000);
+            }
+        }
+
+        function goUpDirectory() {
+            if (currentPath.length > 1) {
+                currentPath.pop();
+                renderFileExplorerContent();
+            }
+        }
+        
+        function getNextAvailableName(baseName, extension) {
+            const currentDir = getCurrentDir(desktopPath);
+            let index = 0;
+            let newName = baseName + (extension ? '.' + extension : '');
+            
+            while (currentDir.hasOwnProperty(newName)) {
+                index++;
+                newName = `${baseName} ${index}` + (extension ? '.' + extension : '');
+            }
+            return newName;
+        }
+
+        function createFileEntry(type, baseName, initialContent = {}) {
+            hideContextMenu();
+            const currentDir = getCurrentDir(desktopPath);
+            if (!currentDir) {
+                alertMessage('File Error', 'Cannot create entry: Desktop directory not found.', 3000);
+                return;
+            }
+
+            let fileName, content;
+            if (type === 'Folder') {
+                fileName = getNextAvailableName('New Folder', null);
+                content = {};
+            } else {
+                const parts = baseName.split('.');
+                const extension = parts.length > 1 ? parts.pop() : null;
+                const base = parts.join('.');
+                
+                fileName = getNextAvailableName(base, extension);
+                content = initialContent;
+            }
+            
+            currentDir[fileName] = content;
+            
+            if (currentDir._layout) {
+                const adjustedX = Math.max(0, contextMenuX - 36); 
+                const adjustedY = Math.max(0, contextMenuY - 40); 
+                currentDir._layout[fileName] = { top: `${adjustedY}px`, left: `${adjustedX}px` };
+            }
+            
+            renderDesktopIcons();
+            const feWindow = document.getElementById('window-FileExplorer');
+            if (feWindow && currentPath.join('/') === desktopPath.join('/')) {
+                renderFileExplorerContent();
+            }
+        }
+
+        function printToTerminal(text) {
+            const output = document.getElementById('terminal-output');
+            if (output) {
+                const p = document.createElement('p');
+                p.innerHTML = text;
+                output.appendChild(p);
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+        
+        function simulateSystemCrash(targetPathStr) {
+            isSystemCrashed = true;
+            document.body.style.pointerEvents = 'none';
+            document.body.style.cursor = 'wait';
+
+            const terminalWindow = document.getElementById('window-Terminal');
+            if (terminalWindow) {
+                terminalWindow.style.border = '5px solid red';
+                terminalWindow.querySelector('.window-header').style.backgroundColor = 'red';
+                terminalWindow.querySelector('.window-content').style.backgroundColor = '#1a0000';
+            }
+
+            printToTerminal(`Executing deletion: **del "${targetPathStr}" -f**`);
+            printToTerminal('Starting system critical deletion...');
+
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.floor(Math.random() * 5) + 1;
+                
+                if (progress < 50) {
+                     printToTerminal(`[PROGRESS] Deleting file **${Math.min(progress, 50)}%**...`);
+                } else {
+                    progress = 50;
+                    clearInterval(progressInterval);
+                    printToTerminal(`[PROGRESS] Deleting file **${progress}%**...`);
+                    printToTerminal('<span class="text-red-500 font-bold">CRITICAL DELETION FAILURE: SYSTEM PROCESS INTERRUPTED.</span>');
+                    printToTerminal('<span class="text-red-500 font-bold">SYSTEM HANG INITIATED.</span>');
+
+                    setTimeout(() => {
+                        document.body.innerHTML = '';
+                        document.body.style.backgroundColor = 'black';
+                        document.body.style.cursor = 'default';
+                    }, 2500);
+                }
+            }, 50);
+        }
+
+        function parsePath(pathStr) {
+            const cleanedPathStr = pathStr.replace(/^"|"$/g, '').replace(/^C:\\/, 'C:/').replace(/\\/g, '/');
+            return cleanedPathStr.split('/').filter(p => p.length > 0);
+        }
+
+        // --- НОВА ФУНКЦІЯ ДЛЯ ПОСЛІДОВНОГО ВИКОНАННЯ СКРИПТА ---
+        function executeTerminalScript(fileName, scriptContent) {
+            // Розбиваємо вміст на окремі рядки, видаляємо пробіли та порожні рядки, фільтруємо коментарі
+            const lines = scriptContent.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0 && !line.startsWith('//') && !line.startsWith('#'));
+
+            if (lines.length === 0) {
+                printToTerminal(`<span class="text-yellow-500">Script **${fileName}** is empty or contains only comments.</span>`);
+                return;
+            }
+
+            if (!document.getElementById('window-Terminal')) openApp('Terminal');
+
+            printToTerminal(`<span class="text-yellow-500">--- Executing script: ${fileName} (${lines.length} commands) ---</span>`);
+
+            let i = 0;
+            
+            function nextCommand() {
+                if (i < lines.length) {
+                    const command = lines[i];
+                    
+                    // Імітуємо затримку виконання
+                    setTimeout(() => {
+                        // 1. Друкуємо команду в термінал, як ніби вона була введена вручну
+                        printToTerminal(`<span class="text-[#00ff41]">guest_user@uuios:~$</span> ${command}`);
+
+                        // 2. Виконуємо команду, передаючи true, щоб уникнути друку зайвого prompt
+                        handleTerminalCommand(command, true); 
+
+                        i++;
+                        // 3. Плануємо виконання наступної команди
+                        nextCommand();
+                    }, 50); // Невелика затримка для імітації "реального" виконання
+                    
+                } else {
+                    printToTerminal(`<span class="text-yellow-500">--- Script execution finished: ${fileName} ---</span>`);
+                }
+            }
+
+            // Запуск черги виконання
+            nextCommand();
+        }
+        // --- КІНЕЦЬ НОВОЇ ФУНКЦІЇ ---
+
+        // --- ОНОВЛЕНА handleTerminalCommand ---
+        function handleTerminalCommand(input, isScriptExecution = false) {
+            if (!isScriptExecution) {
+                printToTerminal(`<span class="text-[#00ff41]">guest_user@uuios:~$</span> ${input}`);
+            }
+            
+            const parts = input.trim().split(/\s+/);
+            const command = parts[0];
+            const arg = parts[1];
+
+            switch (command.toLowerCase()) {
+                case 'help':
+                    printToTerminal(`
+                        <span class="text-white">UUIOS Terminal Commands:</span><br>
+                        - <span class="text-[#00ff41]">help</span>: Show this help message.<br>
+                        - <span class="text-[#00ff41]">ls</span>: List contents of the current directory.<br>
+                        - <span class="text-[#00ff41]">cd [dir]</span>: Change directory (use 'cd ..' to go up).<br>
+                        - <span class="text-[#00ff41]">clear</span>: Clear the terminal output.<br>
+                        - <span class="text-[#00ff41]">echo [text]</span>: Print text.<br>
+                        - <span class="text-[#00ff41]">start "path\\to\\file"</span>: Open or execute a file/folder.<br>
+                        <br>
+                        <span class="text-red-500">DANGEROUS COMMANDS: (Use at your own risk)</span><br>
+                        - <span class="text-red-500">access -d "C:\\System" -f</span>: Obtain maximum deletion access to the critical system folder.<br>
+                        - <span class="text-red-500">del "C:\\System" -f</span>: Force delete the critical system folder.<br>
+                    `);
+                    break;
+                case 'ls':
+                    const dir = getCurrentDir(currentPath);
+                    if (dir && typeof dir === 'object') {
+                        const contents = Object.keys(dir)
+                            .filter(name => name !== '_layout' && name !== '_protected')
+                            .map(name => {
+                                const isFolder = typeof dir[name] === 'object';
+                                return isFolder ? `<span class="text-os-accent">${name}\\</span>` : name;
+                            }).join(' &nbsp; ');
+                        printToTerminal(contents.length > 0 ? contents : ' (empty)');
+                    } else {
+                        printToTerminal('<span class="text-red-500">ls: cannot access directory.</span>');
+                    }
+                    break;
+                case 'cd':
+                    if (arg === '..') {
+                        goUpDirectoryTerminal();
+                    } else if (arg) {
+                        changeDirectoryTerminal(arg);
+                    } else {
+                        printToTerminal(`Current path: ${currentPath.join('\\')}`);
+                    }
+                    break;
+                case 'clear':
+                    document.getElementById('terminal-output').innerHTML = '';
+                    break;
+                case 'echo':
+                    printToTerminal(parts.slice(1).join(' '));
+                    break;
+                case 'start':
+                    if (parts.length < 2) {
+                        printToTerminal('<span class="text-red-500">start: Missing file path argument. Usage: start "path\\to\\file"</span>');
+                        break;
+                    }
+                    
+                    const targetPathStr = parts.slice(1).join(' ').replace(/^"|"$/g, '');
+                    const fullPathArray = parsePath(targetPathStr);
+
+                    if (fullPathArray.length === 0) {
+                        printToTerminal('<span class="text-red-500">start: Invalid path.</span>');
+                        break;
+                    }
+
+                    const fileName = fullPathArray[fullPathArray.length - 1];
+                    const parentPathArray = fullPathArray.slice(0, fullPathArray.length - 1);
+                    
+                    if (parentPathArray.join('\\').toLowerCase() !== desktopPath.join('\\').toLowerCase()) {
+                         printToTerminal(`<span class="text-red-500">start: File execution is limited to Desktop files in this simulation: ${targetPathStr}</span>`);
+                         break;
+                    }
+
+                    const fileContent = getCurrentDir(desktopPath)[fileName];
+                    if (fileContent === undefined) { 
+                        printToTerminal(`<span class="text-red-500">start: File not found at: ${targetPathStr}</span>`);
+                        break;
+                    }
+
+                    const isFolder = typeof fileContent === 'object';
+                    const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+
+                    if (isFolder) {
+                        if (currentPath.join('\\') !== desktopPath.join('\\')) {
+                            currentPath = [...desktopPath];
+                        }
+                        openApp('FileExplorer');
+                        setTimeout(() => {
+                            changeDirectory(fileName);
+                        }, 100);
+                        break;
+                    }
+                    
+                    if (ext === 'ts') {
+                        if (isScriptExecution) {
+                            printToTerminal(`<span class="text-red-500">Error: Recursive script execution is not allowed in this simulation.</span>`);
+                            break;
+                        }
+                        if (fileContent && fileContent.trim().length > 0) {
+                            executeTerminalScript(fileName, fileContent);
+                        } else {
+                            alertMessage('Script Error', `${fileName} is empty and cannot be run.`, 2000);
+                        }
+                        break;
+                    } else if (ext === 'txt' || ext === 'md') {
+                        openFileEditor(fileName);
+                    } else if (ext === 'app' || ext === 'dmg') {
+                        alertMessage('App Launcher', `Launching application: ${fileName}`, 3000);
+                    } else {
+                        alertMessage('File Error', `Cannot open file type: ${ext}`, 2000);
+                    }
+                    break;
+                case 'access':
+                    if (parts.length === 4 && parts[1] === '-d' && parts[3] === '-f') {
+                        const targetPathStr = parts[2].replace(/^"|"$/g, '');
+                        if (targetPathStr.toLowerCase().includes('c:\\system') || targetPathStr.toLowerCase().includes('c:/system')) {
+                            const systemDir = getCurrentDir(['C:', 'System']);
+                            if (systemDir) {
+                                systemDir._protected = false; 
+                                printToTerminal(`<span class="text-yellow-500">access: Access to C:\\System successfully obtained. You can now delete files.</span>`);
+                                break;
+                            }
+                        }
+                        
+                        const fullPath = parsePath(parts[2]);
+                        
+                        if (fullPath.length > 0) {
+                            const targetName = fullPath.pop();
+                            const parentPath = fullPath;
+                            const parentDir = getCurrentDir(parentPath);
+                            
+                            if (parentDir && parentDir[targetName] && typeof parentDir[targetName] === 'object' && parentDir[targetName]._protected) {
+                                parentDir[targetName]._protected = false;
+                                printToTerminal(`<span class="text-yellow-500">Protection disabled for: ${parentPath.join('\\')}\\${targetName}</span>`);
+                            } else {
+                                printToTerminal(`<span class="text-red-500">access: File not found or is not protected.</span>`);
+                            }
+                        } else {
+                            printToTerminal(`<span class="text-red-500">access: Invalid path format. Use: access -d "path\\to\\dir" -f</span>`);
+                        }
+                    } else {
+                        printToTerminal(`<span class="text-red-500">access: Invalid arguments. Use: access -d "path" -f</span>`);
+                    }
+                    break;
+                case 'del':
+                    if (parts.length === 3 && parts[2] === '-f') {
+                        const targetPathStr = parts[1].replace(/^"|"$/g, '');
+                        if (targetPathStr.toLowerCase().includes('c:\\system') || targetPathStr.toLowerCase().includes('c:/system')) {
+                            const systemDir = getCurrentDir(['C:', 'System']);
+                            if (systemDir && systemDir._protected === true) {
+                                printToTerminal(`<span class="text-red-500">del: Cannot delete protected folder "C:\\System". Use 'access -d "C:\\System" -f' first.</span>`);
+                                break;
+                            }
+                            simulateSystemCrash(targetPathStr);
+                            break; 
+                        }
+                        
+                        const fullPath = parsePath(parts[1]);
+
+                        if (fullPath.length > 0) {
+                            const targetName = fullPath.pop();
+                            const parentPath = fullPath;
+                            const parentDir = getCurrentDir(parentPath);
+
+                            if (parentDir && parentDir[targetName]) {
+                                if (parentDir[targetName]._protected === true) {
+                                    printToTerminal(`<span class="text-red-500">del: Cannot delete protected file/directory: ${targetName}</span>`);
+                                    break;
+                                }
+                                
+                                delete parentDir[targetName];
+                                
+                                if (parentPath.join('/') === desktopPath.join('/') && parentDir._layout && parentDir._layout[targetName]) {
+                                    delete parentDir._layout[targetName];
+                                    renderDesktopIcons();
+                                }
+
+                                printToTerminal(`<span class="text-red-500">SUCCESS: Deleted ${parentPath.join('\\')}\\${targetName}</span>`);
+                            } else {
+                                printToTerminal(`<span class="text-red-500">del: File not found: ${parts[1]}</span>`);
+                            }
+                        } else {
+                             printToTerminal(`<span class="text-red-500">del: Invalid path. Use: del "file" -f</span>`);
+                        }
+                    } else {
+                        printToTerminal(`<span class="text-red-500">del: Invalid arguments. Use: del "file" -f</span>`);
+                    }
+                    break;
+                default:
+                    printToTerminal(`<span class="text-red-500">zsh: command not found: ${command}</span>`);
+            }
+        }
+        // --- КІНЕЦЬ ОНОВЛЕНОЇ handleTerminalCommand ---
+
+
+        function changeDirectoryTerminal(folderName) {
+            const target = folderName.replace(/\/$/, '');
+            const newPath = [...currentPath, target];
+            const targetDir = getCurrentDir(newPath);
+            if (targetDir && typeof targetDir === 'object') {
+                currentPath = newPath;
+                printToTerminal(`Changed directory to: ${currentPath.join('\\')}`);
+                const feWindow = document.getElementById('window-FileExplorer');
+                if (feWindow) renderFileExplorerContent();
+            } else {
+                printToTerminal(`<span class="text-red-500">cd: no such file or directory: ${folderName}</span>`);
+            }
+        }
+
+        function goUpDirectoryTerminal() {
+            if (currentPath.length > 1) {
+                currentPath.pop();
+                printToTerminal(`Changed directory to: ${currentPath.join('\\')}`);
+                const feWindow = document.getElementById('window-FileExplorer');
+                if (feWindow) renderFileExplorerContent();
+            } else {
+                printToTerminal('cd: already at root (C:).');
+            }
+        }
+
+        function calcAction(val) {
+            const display = document.getElementById('calc-display');
+            if (!display) return;
+            let current = display.value;
+
+            switch (val) {
+                case 'C':
+                    display.value = '0';
+                    break;
+                case '=':
+                    try {
+                        const result = eval(current.replace('×', '*').replace('÷', '/'));
+                        display.value = Number.isFinite(result) ? result : 'Error';
+                    } catch (e) {
+                        display.value = 'Error';
+                    }
+                    break;
+                default:
+                    if (current === '0' || current === 'Error') {
+                        display.value = val;
+                    } else {
+                        display.value += val;
+                    }
+            }
+        }
+
+        function alertMessage(title, message, duration) {
+            const container = document.getElementById('window-container');
+            const alertBox = document.createElement('div');
+            alertBox.classList.add('window', 'p-4', 'fixed', 'top-1/2', 'left-1/2', 'transform', '-translate-x-1/2', '-translate-y-1/2', 'rounded-md', 'z-[900]');
+            alertBox.style.width = '300px';
+            alertBox.style.backgroundColor = `var(--os-window-bg)`;
+            alertBox.innerHTML = `
+                <div class="font-bold mb-3 text-lg text-os-accent">${title}</div>
+                <p class="text-sm mb-4">${message}</p>
+                <div class="flex justify-end">
+                    <button class="flat-button py-1 px-3 rounded-md" onclick="this.parentNode.parentNode.remove()">OK</button>
+                </div>
+            `;
+            container.appendChild(alertBox);
+            setTimeout(() => {
+                alertBox.remove();
+            }, duration || 5000);
+        }
+
+        function handleBoot() {
+            let width = 0;
+            const bar = document.getElementById('loading-bar');
+            const interval = setInterval(() => {
+                width += 1;
+                bar.style.width = width + '%';
+                
+                if (width >= 100) {
+                    clearInterval(interval);
+                    showScreen('lock-screen');
+                }
+            }, 10);
+        }
+
+        function contextOpenFile() {
+            hideContextMenu();
+            if (selectedFileForContext) {
+                handleTerminalCommand(`start "${getFullPath(selectedFileForContext)}"`);
+            } else {
+                alertMessage('Open Error', 'No file or folder selected.', 2000);
+            }
+        }
+
+        function contextEditFile() {
+            hideContextMenu();
+            if (selectedFileForContext) {
+                openFileEditor(selectedFileForContext);
+            } else {
+                alertMessage('Edit Error', 'No editable file selected.', 2000);
+            }
+        }
+
+        function contextProperties() {
+            hideContextMenu();
+            if (!selectedFileForContext) return;
+            renderPropertiesWindow(selectedFileForContext);
+            selectedFileForContext = null;
+        }
+
+        function showContextMenu(e, targetElement = null) {
+            e.preventDefault();
+            
+            contextMenuX = e.clientX;
+            contextMenuY = e.clientY; 
+
+            const menu = document.getElementById('context-menu');
+            
+            const openBtn = document.getElementById('context-menu-open');
+            const editBtn = document.getElementById('context-menu-edit');
+            const renameBtn = document.getElementById('context-menu-rename');
+            const deleteBtn = document.getElementById('context-menu-delete');
+            const propertiesBtn = document.getElementById('context-menu-properties');
+            const newFolderBtn = document.getElementById('context-menu-new-folder');
+            const newFileBtn = document.getElementById('context-menu-new-file');
+            const sep1 = document.getElementById('separator-1');
+            const sep3 = document.getElementById('separator-3');
+
+            let targetIcon = targetElement?.closest('.desktop-icon-entry');
+            selectedFileForContext = targetIcon?.dataset.fileName || null;
+
+            if (selectedFileForContext) {
+                const ext = selectedFileForContext.includes('.') ? selectedFileForContext.split('.').pop().toLowerCase() : '';
+                const isEditable = ['txt', 'ts', 'md'].includes(ext);
+
+                openBtn.style.display = 'flex';
+                editBtn.style.display = isEditable ? 'flex' : 'none';
+                renameBtn.style.display = 'flex';
+                deleteBtn.style.display = 'flex';
+                propertiesBtn.style.display = 'flex';
+                sep1.style.display = 'flex';
+                sep3.style.display = 'flex';
+
+                newFolderBtn.style.display = 'none';
+                newFileBtn.style.display = 'none';
+                document.getElementById('separator-2').style.display = 'none';
+            } else {
+                newFolderBtn.style.display = 'flex';
+                newFileBtn.style.display = 'flex';
+                document.getElementById('separator-2').style.display = 'flex';
+
+                openBtn.style.display = 'none';
+                editBtn.style.display = 'none';
+                renameBtn.style.display = 'none';
+                deleteBtn.style.display = 'none';
+                propertiesBtn.style.display = 'none';
+                sep1.style.display = 'none';
+                sep3.style.display = 'none';
+            }
+
+            let menuWidth = menu.offsetWidth || 180;
+            let menuHeight = menu.offsetHeight || 200; 
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if (clientX + menuWidth > window.innerWidth) {
+                clientX = window.innerWidth - menuWidth - 10; 
+            }
+            if (clientY + menuHeight > window.innerHeight) {
+                clientY = window.innerHeight - menuHeight - 10;
+            }
+
+            menu.style.left = clientX + 'px';
+            menu.style.top = clientY + 'px';
+            menu.style.display = 'block';
+            e.stopPropagation();
+        }
+
+        function hideContextMenu() {
+            document.getElementById('context-menu').style.display = 'none';
+        }
+
+        function contextRenameFile() {
+            hideContextMenu();
+            if (!selectedFileForContext) {
+                alertMessage('Rename Error', 'No file/folder selected for renaming.', 2000);
+                return;
+            }
+
+            const oldName = selectedFileForContext;
+            const iconElement = document.querySelector(`.desktop-icon-entry[data-file-name="${oldName}"]`);
+            if (!iconElement) return;
+
+            const nameSpan = iconElement.querySelector('.icon-name');
+            nameSpan.style.display = 'none';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = oldName;
+            input.classList.add('renaming');
+            input.style.width = 'calc(100% - 4px)';
+            input.style.marginTop = '4px';
+
+            iconElement.appendChild(input);
+
+            const dotIndex = oldName.lastIndexOf('.');
+            let selectEnd = oldName.length;
+            if (dotIndex > 0 && iconElement.dataset.isFolder !== 'true') {
+                selectEnd = dotIndex;
+            }
+
+            input.focus();
+            input.setSelectionRange(0, selectEnd);
+
+            const finalizeRename = () => {
+                const newName = input.value.trim();
+                input.remove();
+                nameSpan.style.display = 'inline-block';
+
+                if (!newName || newName === oldName) {
+                    renderDesktopIcons();
+                    return; 
+                }
+
+                const currentDir = getCurrentDir(desktopPath);
+                if (currentDir.hasOwnProperty(newName)) {
+                    alertMessage('Rename Error', `File or folder named "${newName}" already exists.`, 3000);
+                    renderDesktopIcons();
+                    return;
+                }
+
+                const fileContent = currentDir[oldName];
+                delete currentDir[oldName];
+                currentDir[newName] = fileContent;
+
+                if (currentDir._layout && currentDir._layout[oldName]) {
+                    currentDir._layout[newName] = currentDir._layout[oldName];
+                    delete currentDir._layout[oldName];
+                }
+                
+                renderDesktopIcons();
+                renderFileExplorerContent();
+                selectedFileForContext = null;
+            };
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    finalizeRename();
+                }
+            });
+
+            input.addEventListener('blur', finalizeRename);
+        }
+
+        function contextDeleteFile() {
+            hideContextMenu();
+            if (!selectedFileForContext) return;
+
+            const fileName = selectedFileForContext;
+            const currentDir = getCurrentDir(desktopPath);
+            const targetContent = currentDir[fileName];
+            
+            if (targetContent && typeof targetContent === 'object' && targetContent._protected === true) {
+                alertMessage('Access Denied', `The file/folder "${fileName}" is protected and cannot be deleted via the GUI.`, 3000);
+                selectedFileForContext = null;
+                return;
+            }
+
+            showCustomConfirm('Confirm Deletion', `Are you sure you want to delete "${fileName}"? This action cannot be undone.`, () => {
+                if (currentDir.hasOwnProperty(fileName)) {
+                    delete currentDir[fileName];
+                    
+                    if (currentDir._layout && currentDir._layout[fileName]) {
+                        delete currentDir._layout[fileName];
+                    }
+
+                    renderDesktopIcons();
+                    
+                    const feWindow = document.getElementById('window-FileExplorer');
+                    if (feWindow && currentPath.join('/') === desktopPath.join('/')) {
+                        renderFileExplorerContent();
+                    }
+                } else {
+                    alertMessage('Deletion Error', `File/folder "${fileName}" not found.`, 2000);
+                }
+                selectedFileForContext = null;
+            });
+        }
+
+        function showCustomConfirm(title, message, onConfirm) {
+            const container = document.getElementById('window-container');
+            const confirmBox = document.createElement('div');
+            confirmBox.classList.add('window', 'p-4', 'fixed', 'top-1/2', 'left-1/2', 'transform', '-translate-x-1/2', '-translate-y-1/2', 'rounded-md', 'z-[950]');
+            confirmBox.style.width = '350px';
+            confirmBox.style.backgroundColor = `var(--os-window-bg)`;
+            
+            const backdrop = document.createElement('div');
+            backdrop.classList.add('fixed', 'inset-0', 'bg-black', 'opacity-50', 'z-[949]');
+            
+            const closeBox = () => {
+                confirmBox.remove();
+                backdrop.remove();
+            };
+
+            confirmBox.innerHTML = `
+                <div class="font-bold mb-3 text-lg text-os-accent">${title}</div>
+                <p class="text-sm mb-6">${message}</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="confirm-cancel-btn" class="flat-button py-1 px-3 rounded-md bg-gray-600 hover:bg-gray-500 transition-none" style="background-color: #555;">Cancel</button>
+                    <button id="confirm-delete-btn" class="flat-button py-1 px-3 rounded-md bg-red-600 hover:bg-red-500 transition-none" style="background-color: #dc2626;">Delete</button>
+                </div>
+            `;
+            
+            container.appendChild(backdrop);
+            container.appendChild(confirmBox);
+
+            document.getElementById('confirm-delete-btn').onclick = () => {
+                onConfirm();
+                closeBox();
+            };
+            
+            document.getElementById('confirm-cancel-btn').onclick = closeBox;
+        }
+
+        document.getElementById('login-button').addEventListener('click', () => {
+            showScreen('desktop-env');
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTime();
+            setInterval(updateTime, 1000);
+            handleBoot();
+        });
+
+        document.getElementById('desktop-env').addEventListener('contextmenu', showContextMenu);
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('context-menu').contains(e.target)) {
+                hideContextMenu();
+            }
+        });
+        document.getElementById('desktop-env').addEventListener('click', (e) => {
+            if (e.target.closest('.desktop-icon-entry')) {
+                return;
+            }
+            document.querySelectorAll('.desktop-icon-entry').forEach(el => {
+                el.style.backgroundColor = 'transparent';
+                el.classList.remove('hover-highlight');
+            });
+            selectedFileForContext = null;
+            hideContextMenu();
+        });
+    </script>
+</body>
+</html>

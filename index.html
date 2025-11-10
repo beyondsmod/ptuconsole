@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTUConsole - Tabbed</title>
+    <style>
+        :root {
+            --color-bg: #000000;
+            --color-text: #FFFFFF;
+            --color-prompt: #FFFFFF;
+            --font-family: monospace;
+            --font-size: 1rem;
+        }
+
+        .theme-green {
+            --color-text: #00FF00;
+            --color-prompt: #00FF00;
+        }
+
+        .theme-amber {
+            --color-text: #FFB800;
+            --color-prompt: #FFB800;
+        }
+
+        .theme-cyan {
+            --color-text: #00FFFF;
+            --color-prompt: #00FFFF;
+        }
+
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tab-bar {
+            background-color: #111;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .tab {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-right: 1px solid #333;
+            color: #AAA;
+            font-family: var(--font-family);
+            display: flex;
+            align-items: center;
+            user-select: none;
+            position: relative;
+        }
+
+        .tab.active {
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            border-color: var(--color-text);
+            border-bottom: 1px solid var(--color-bg); 
+        }
+
+        .tab-close {
+            margin-left: 10px;
+            font-weight: bold;
+            color: #777;
+        }
+
+        .tab.active .tab-close {
+            color: var(--color-text);
+        }
+
+        .tab-add {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #AAA;
+            border-left: 1px solid #333;
+        }
+
+        .terminal-container {
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .terminal-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 10px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
+            display: none;
+        }
+
+        .terminal-content.active {
+            display: block;
+        }
+
+        .terminal-line {
+            line-height: 1.2; 
+        }
+
+        .prompt {
+            color: var(--color-prompt);
+            display: inline;
+        }
+
+        .input-line {
+            display: flex;
+            align-items: baseline;
+            margin-top: 0;
+        }
+
+        .commandInput {
+            flex-grow: 1;
+            background: transparent;
+            color: var(--color-text);
+            border: none; 
+            outline: none; 
+            caret-color: var(--color-text);
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            padding: 0;
+            margin-left: 0;
+            line-height: 1.2;
+        }
+
+        .folder-item {
+            color: var(--color-prompt);
+            font-weight: bold;
+        }
+
+        .file-item {
+            color: var(--color-text);
+        }
+
+        .hack-progress {
+            color: #00FFFF;
+        }
+        .hack-info {
+            color: #FFFF00;
+        }
+        .hack-error {
+            color: #FF0000;
+        }
+        .hack-success {
+            color: #00FF00;
+        }
+        
+        .tree-error {
+            color: #FF0000;
+        }
+
+        .run-init { 
+            color: #87CEFA; 
+            font-weight: bold;
+        }
+        .run-ok { 
+            color: #00FF00; 
+        }
+        .run-fail { 
+            color: #FF4500; 
+            font-weight: bold;
+        }
+        
+        .scan-open {
+            color: #00FF00;
+        }
+        .scan-closed {
+            color: #777777;
+        }
+
+        .install-info {
+            color: #00FFFF; 
+        }
+        .install-success {
+            color: #00FF00; 
+        }
+        .install-fail {
+            color: #FF4500;
+        }
+        .netboot-info {
+            color: #FFFF00;
+        }
+        .inject-info {
+            color: #87CEFA; 
+        }
+        .uui-boot {
+            color: #FF00FF; 
+        }
+
+        .black-screen {
+            background-color: #000;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body class="theme-white">
+
+    <div id="tabBar" class="tab-bar">
+        <div id="tab-add" class="tab-add" aria-label="Add new session tab">+</div>
+    </div>
+
+    <div id="terminalContainer" class="terminal-container">
+        </div>
+
+    <script>
+        let sessionIdCounter = 1;
+        let activeSessionId = null;
+        const sessions = {}; 
+        const MAX_SESSIONS = 5;
+
+        const tabBar = document.getElementById('tabBar');
+        const terminalContainer = document.getElementById('terminalContainer');
+
+        const themeMap = {
+            'white': 'theme-white',
+            'w': 'theme-white',
+            'green': 'theme-green',
+            'g': 'theme-green',
+            'amber': 'theme-amber',
+            'a': 'theme-amber',
+            'cyan': 'theme-cyan',
+            'c': 'theme-cyan'
+        };
+
+        function getPrompt(id) {
+            return `s${id}> `;
+        }
+        
+        function createNewSession() {
+            if (Object.keys(sessions).length >= MAX_SESSIONS) {
+                alert('Cannot create more than ' + MAX_SESSIONS + ' sessions.');
+                return;
+            }
+            
+            const sessionId = sessionIdCounter++;
+            const sessionName = `Session${sessionId}`;
+            const prompt = getPrompt(sessionId);
+            const sessionCreationTime = new Date().toLocaleString('en-US'); 
+            
+            const tabEl = document.createElement('div');
+            tabEl.classList.add('tab');
+            tabEl.id = `tab-${sessionId}`;
+            tabEl.setAttribute('aria-controls', `content-${sessionId}`);
+            tabEl.setAttribute('role', 'tab');
+            tabEl.setAttribute('tabindex', '-1');
+            tabEl.innerHTML = `${sessionName}<span class="tab-close" data-id="${sessionId}" aria-label="Close session ${sessionId}">x</span>`;
+            
+            tabBar.insertBefore(tabEl, document.getElementById('tab-add'));
+            
+            const contentEl = document.createElement('div');
+            contentEl.classList.add('terminal-content');
+            contentEl.id = `content-${sessionId}`;
+            contentEl.setAttribute('role', 'tabpanel');
+            contentEl.setAttribute('aria-labelledby', `tab-${sessionId}`);
+            contentEl.setAttribute('tabindex', '0');
+            
+            contentEl.innerHTML = `
+                <div class="history">
+                    <div class="terminal-line">Welcome to PTUConsole — type help for commands.</div>
+                </div>
+                <div class="input-line">
+                    <span class="prompt" aria-hidden="true">${prompt}</span>
+                    <input type="text" class="commandInput" autofocus autocomplete="off" aria-label="Command input for ${sessionName}">
+                </div>
+            `;
+            terminalContainer.appendChild(contentEl);
+
+            const inputEl = contentEl.querySelector('.commandInput');
+            const historyEl = contentEl.querySelector('.history');
+            
+            sessions[sessionId] = {
+                historyDiv: historyEl,
+                inputElement: inputEl,
+                currentInputDiv: contentEl.querySelector('.input-line'),
+                currentDirectory: 'C:\\',
+                theme: 'white', 
+                isHacking: false,
+                hackInterval: null,
+                isTreeRunning: false,
+                treeInterval: null,
+                isRunProcessRunning: false, 
+                runInterval: null, 
+                contentEl: contentEl,
+                tabEl: tabEl,
+                sessionStartTime: sessionCreationTime, 
+                commandHistory: [], 
+                historyIndex: -1,
+                isUUIInstalled: false, 
+                isNetbootReady: false, 
+                isKernelInjected: false
+            };
+
+            tabEl.addEventListener('click', (e) => {
+                if (e.target.classList.contains('tab-close')) {
+                    closeSession(sessionId);
+                } else {
+                    switchSession(sessionId);
+                }
+            });
+            
+            inputEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitCommand(sessionId);
+                } else if (e.key === 'ArrowUp') { 
+                    e.preventDefault();
+                    navigateHistory(sessionId, -1);
+                } else if (e.key === 'ArrowDown') { 
+                    e.preventDefault();
+                    navigateHistory(sessionId, 1);
+                }
+            });
+
+            contentEl.addEventListener('click', () => {
+                inputEl.focus();
+            });
+
+            switchSession(sessionId);
+        }
+
+        function switchSession(newId) {
+            if (activeSessionId === newId) return;
+
+            if (activeSessionId !== null && sessions[activeSessionId]) {
+                sessions[activeSessionId].tabEl.classList.remove('active');
+                sessions[activeSessionId].contentEl.classList.remove('active');
+                sessions[activeSessionId].contentEl.setAttribute('tabindex', '-1');
+                sessions[activeSessionId].tabEl.setAttribute('tabindex', '-1');
+            }
+
+            activeSessionId = newId;
+            const session = sessions[newId];
+            
+            session.tabEl.classList.add('active');
+            session.contentEl.classList.add('active');
+            session.contentEl.setAttribute('tabindex', '0');
+            session.tabEl.setAttribute('tabindex', '0');
+            
+            document.body.className = themeMap[session.theme] || 'theme-white'; 
+            session.inputElement.focus();
+            session.contentEl.scrollTop = session.contentEl.scrollHeight;
+        }
+        
+        function closeSession(id) {
+            const session = sessions[id];
+            
+            if (session.hackInterval) {
+                clearInterval(session.hackInterval);
+            }
+            if (session.treeInterval) {
+                clearInterval(session.treeInterval);
+            }
+            if (session.runInterval) { 
+                clearInterval(session.runInterval);
+            }
+
+            if (Object.keys(sessions).length === 1) {
+                alert('Cannot close the last remaining session.');
+                return;
+            }
+
+            session.tabEl.remove();
+            session.contentEl.remove();
+            delete sessions[id];
+
+            if (activeSessionId === id) {
+                const sessionIds = Object.keys(sessions).map(Number).sort((a, b) => a - b);
+                const nextId = sessionIds[0]; 
+                switchSession(nextId);
+            }
+        }
+
+        function appendLine(sessionId, text, className = '') {
+            const session = sessions[sessionId];
+            const line = document.createElement('div');
+            line.classList.add('terminal-line');
+            if (className) line.classList.add(className);
+            line.textContent = text;
+            session.historyDiv.appendChild(line);
+            session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            return line; 
+        }
+
+        function submitCommand(sessionId) {
+            const session = sessions[sessionId];
+            
+            if (session.isHacking || session.isTreeRunning || session.isRunProcessRunning) return;
+            
+            const fullCommand = session.inputElement.value.trim();
+            session.inputElement.value = '';
+            
+            if (fullCommand) {
+                session.commandHistory.push(fullCommand); 
+                session.historyIndex = session.commandHistory.length; 
+            }
+            
+            const prompt = getPrompt(sessionId); 
+
+            const executedLine = document.createElement('div');
+            executedLine.classList.add('terminal-line');
+            executedLine.innerHTML = `<span class="prompt">${prompt}</span>${fullCommand}`;
+            session.historyDiv.appendChild(executedLine);
+
+            parseCommand(sessionId, fullCommand);
+
+            session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            session.inputElement.focus();
+        }
+
+        function navigateHistory(sessionId, direction) {
+            const session = sessions[sessionId];
+            if (session.isHacking || session.isTreeRunning || session.isRunProcessRunning) return;
+
+            let newIndex = session.historyIndex + direction;
+
+            if (newIndex >= 0 && newIndex < session.commandHistory.length) {
+                session.historyIndex = newIndex;
+                session.inputElement.value = session.commandHistory[session.historyIndex];
+            } else if (newIndex >= session.commandHistory.length) {
+                session.historyIndex = session.commandHistory.length;
+                session.inputElement.value = '';
+            }
+        }
+
+        function parseCommand(sessionId, fullCommand) {
+            const session = sessions[sessionId];
+            const parts = fullCommand.split(/\s+/).filter(p => p.length > 0);
+            if (parts.length === 0) return;
+
+            const command = parts[0].toLowerCase();
+            const args = parts.slice(1);
+            const argText = args.join(' ');
+
+            switch (command) {
+                case 'help':
+                    printHelp(sessionId);
+                    break;
+                case 'about':
+                    appendLine(sessionId, 'PTUConsole — visual terminal emulator. No network or real hacking.');
+                    break;
+                case 'dir':
+                    printDir(sessionId);
+                    break;
+                case 'cd':
+                    changeDir(sessionId, args[0]);
+                    break;
+                case 'cls':
+                case 'clear':
+                    clearTerminal(sessionId);
+                    break;
+                case 'echo':
+                    appendLine(sessionId, argText);
+                    break;
+                case 'banner':
+                    printBanner(sessionId, argText);
+                    break;
+                case 'genpass':
+                    generateGenpass(sessionId);
+                    break;
+                case 'hack':
+                    startHack(sessionId, args[0]);
+                    break;
+                case 'color': 
+                    setColor(sessionId, args[0]);
+                    break;
+                case 'date': 
+                case 'time': 
+                    printDateTime(sessionId);
+                    break;
+                case 'ipconfig': 
+                    printIPConfig(sessionId);
+                    break;
+                case 'ping': 
+                    startPing(sessionId, args[0]);
+                    break;
+                case 'sysinfo': 
+                    printSysInfo(sessionId);
+                    break;
+                case 'net': 
+                    if (args[0] && args[0].toLowerCase() === 'user') {
+                        printNetUser(sessionId);
+                    } else if (args[0] && args[0].toLowerCase() === 'boot' && args[1] && args[1].toLowerCase() === 'ready') {
+                         setNetbootReady(sessionId);
+                    } else {
+                        appendLine(sessionId, `The syntax of the command is: NET [ ACCOUNTS | COMPUTER | CONFIG | CONTINUE | FILE | GROUP | HELP | HELPMSG | LOCALGROUP | NAME | PAUSE | PRINT | SESSION | SHARE | START | STATISTICS | STOP | TIME | USE | USER | VIEW | BOOT READY ]`);
+                    }
+                    break;
+                case 'tasklist': 
+                    printTaskList(sessionId);
+                    break;
+                case 'tree':
+                    startTreeSpam(sessionId);
+                    break;
+                case 'run': 
+                    if (args[0] && args[0].toLowerCase() === 'uui.qcom') {
+                        startRunUUI(sessionId);
+                    } else {
+                        startRunProcess(sessionId);
+                    }
+                    break;
+                case 'stop': 
+                    stopAnyProcess(sessionId);
+                    break;
+                case 'scan': 
+                    startScan(sessionId, args[0]);
+                    break;
+                case 'command':
+                    if (args[0] && args[0].toLowerCase() === 'install' && args[1]) {
+                        startInstallUUI(sessionId, args[1]);
+                    } else {
+                        appendLine(sessionId, 'Unknown command: command. Try: command install <net file>');
+                    }
+                    break;
+                case 'netboot':
+                    if (args[0] && args[0].toLowerCase() === 'ready') {
+                        setNetbootReady(sessionId);
+                    } else {
+                        appendLine(sessionId, 'Unknown command: netboot. Try: netboot ready');
+                    }
+                    break;
+                case 'inject':
+                    if (args[0] && args[0].toLowerCase() === 'uuikernel') {
+                        injectUUIKernel(sessionId);
+                    } else {
+                        appendLine(sessionId, 'Unknown command: inject. Try: inject <installed net file>');
+                    }
+                    break;
+                case 'exit':
+                    simulateExit();
+                    break;
+                default:
+                    appendLine(sessionId, `Unknown command: ${command}`);
+                    break;
+            }
+        }
+        
+        function printHelp(sessionId) {
+            appendLine(sessionId, 'Available commands:');
+            appendLine(sessionId, '  help      - List available commands.');
+            appendLine(sessionId, '  about     - Show description.');
+            appendLine(sessionId, '  dir       - List files and folders.');
+            appendLine(sessionId, '  cd <path> - Change directory (e.g., cd .., cd C:\\).');
+            appendLine(sessionId, '  cls/clear - Clear terminal history.');
+            appendLine(sessionId, '  echo <text> - Print the text.');
+            appendLine(sessionId, '  banner <text> - Print text in an ASCII banner.');
+            appendLine(sessionId, '  genpass   - Generate a fake random password.');
+            appendLine(sessionId, '  hack <name> - Start a fake hacking sequence.');
+            appendLine(sessionId, '  run       - Start system initialization sequence or run uui.qcom.');
+            appendLine(sessionId, '  stop      - Stop running process (hack/tree/run/scan/install).');
+            appendLine(sessionId, '  scan <addr> - Simulates a detailed system/port scan.');
+            appendLine(sessionId, '  date/time - Display the current system date and time.');
+            appendLine(sessionId, '  ipconfig  - Display fake network configuration.');
+            appendLine(sessionId, '  ping <addr> - Send fake ICMP requests to an address.');
+            appendLine(sessionId, '  sysinfo   - Display basic system information.'); 
+            appendLine(sessionId, '  net user  - Display system users.');
+            appendLine(sessionId, '  tasklist  - Display running tasks.');
+            appendLine(sessionId, '  tree      - Display the directory tree structure (spam).');
+            appendLine(sessionId, '  color <name/init> - Change terminal color (w/white, g/green, a/amber, c/cyan).');
+            appendLine(sessionId, '  command install <file> - Install a network file (e.g., uuibeta.qcom).');
+            appendLine(sessionId, '  netboot <function> - Prepare the system for network boot (e.g., netboot ready).');
+            appendLine(sessionId, '  inject <file> - Inject an installed kernel (e.g., inject uuikernel).');
+            appendLine(sessionId, '  exit      - Simulate terminal exit.');
+        }
+
+        function printSysInfo(sessionId) {
+            const session = sessions[sessionId];
+            const availableMem = '2,783 MB';
+            const totalMem = '4,096 MB';
+            const virtualMax = '12,000 MB';
+
+            appendLine(sessionId, 'Host Name:                 HOST');
+            appendLine(sessionId, 'OS Name:                   Unknown');
+            appendLine(sessionId, 'OS Version:                1.0');
+            appendLine(sessionId, 'OS Configuration:          Unknown');
+            appendLine(sessionId, 'Registered Owner:          admin');
+            appendLine(sessionId, `Processor(s):              1 Processor(s) Installed.`);
+            appendLine(sessionId, `                           [01]: Generic CPU Emulation Core @ 3.00GHz`);
+            appendLine(sessionId, `Total Physical Memory:     ${totalMem}`);
+            appendLine(sessionId, `Available Physical Memory: ${availableMem}`);
+            appendLine(sessionId, `Virtual Memory: Max Size:  ${virtualMax}`);
+            appendLine(sessionId, `Network Card(s):           1 NIC(s) Installed.`);
+            appendLine(sessionId, `                           [01]: Emulated Ethernet Adapter`);
+            appendLine(sessionId, `System Boot Time:          ${session.sessionStartTime}`); 
+        }
+
+        function printNetUser(sessionId) {
+            appendLine(sessionId, 'User accounts for \\\\EMULATOR-HOST');
+            appendLine(sessionId, '');
+            appendLine(sessionId, '-------------------------------------------------------------------------------');
+            appendLine(sessionId, 'Administrator          Guest                  LocalUser');
+            appendLine(sessionId, 'PTUAdmin               TheHacker              WebAppUser');
+            appendLine(sessionId, '-------------------------------------------------------------------------------');
+            appendLine(sessionId, 'The command completed successfully.');
+        }
+
+        function printTaskList(sessionId) {
+            const processes = [
+                ['System', 4, 1, 'Console', 0, 'N/A'],
+                ['smss.exe', 368, 0, 'Console', 0, '256 K'],
+                ['csrss.exe', 512, 0, 'Console', 0, '3,008 K'],
+                ['wininit.exe', 584, 0, 'Console', 0, '4,096 K'],
+                ['services.exe', 632, 0, 'Console', 0, '12,288 K'],
+                ['lsass.exe', 640, 0, 'Console', 0, '20,480 K'],
+                ['svchost.exe', 720, 0, 'Console', 0, '8,192 K'],
+                ['explorer.exe', 1024, 1, 'Console', 0, '51,200 K'],
+                ['cmd.exe', 2048, 1, 'Console', 0, '2,048 K'],
+                ['browser.exe', 3000, 1, 'Console', 0, '256,000 K'],
+                ['ptuconsole.exe', 4500, 1, 'Console', 0, '10,240 K'],
+            ];
+
+            const header = 'Image Name'.padEnd(20) + 'PID'.padEnd(10) + 'Session Name'.padEnd(15) + 'Mem Usage';
+            appendLine(sessionId, header);
+            appendLine(sessionId, '='.repeat(header.length));
+
+            processes.forEach(p => {
+                const [name, pid, session, sessionName, memory] = p;
+                const line = name.padEnd(20) + String(pid).padEnd(10) + 'Console'.padEnd(15) + `${Math.floor(Math.random() * 100) + 10} K`;
+                appendLine(sessionId, line);
+            });
+
+            appendLine(sessionId, 'The command completed successfully.');
+        }
+
+        function printDir(sessionId) {
+            const session = sessions[sessionId];
+            appendLine(sessionId, `Directory of ${session.currentDirectory}`);
+            appendLine(sessionId, '<DIR>          .', 'folder-item');
+            appendLine(sessionId, '<DIR>          ..', 'folder-item');
+            appendLine(sessionId, '<DIR>          SystemFiles', 'folder-item');
+            if (session.isUUIInstalled) {
+                appendLine(sessionId, '<DIR>          UUISystem', 'folder-item');
+                appendLine(sessionId, '12288          uui.qcom', 'file-item');
+                appendLine(sessionId, '4096           uuikernel', 'file-item');
+            }
+            appendLine(sessionId, '4096           index.html', 'file-item');
+            appendLine(sessionId, '1024           config.json', 'file-item');
+            appendLine(sessionId, '512            log.txt', 'file-item');
+        }
+
+        function changeDir(sessionId, path) {
+            const session = sessions[sessionId];
+            if (!path) {
+                appendLine(sessionId, `Current directory: ${session.currentDirectory}`);
+                return;
+            }
+            path = path.trim();
+            if (path === '..') {
+                if (session.currentDirectory === 'C:\\') {
+                    appendLine(sessionId, 'Cannot move up from root directory.');
+                } else {
+                    const parts = session.currentDirectory.split('\\').filter(p => p.length > 0);
+                    if (parts.length > 1) {
+                        parts.pop();
+                        session.currentDirectory = parts.join('\\') + '\\';
+                    } else {
+                        session.currentDirectory = 'C:\\';
+                    }
+                    appendLine(sessionId, `Changed directory to: ${session.currentDirectory}`);
+                }
+            } else if (path.toUpperCase() === 'C:\\') {
+                session.currentDirectory = 'C:\\';
+                appendLine(sessionId, `Changed directory to: ${session.currentDirectory}`);
+            } else {
+                let newDir = path.replace(/[^a-zA-Z0-9_.-]/g, '');
+                if (newDir.length > 0) {
+                    session.currentDirectory = (session.currentDirectory.endsWith('\\') ? session.currentDirectory : session.currentDirectory + '\\') + newDir + '\\';
+                    appendLine(sessionId, `Changed directory to: ${session.currentDirectory}`);
+                } else {
+                    appendLine(sessionId, `Invalid directory path: ${path}`);
+                }
+            }
+        }
+
+        function clearTerminal(sessionId) {
+            const session = sessions[sessionId];
+            session.historyDiv.innerHTML = '';
+            session.inputElement.focus();
+        }
+
+        function printBanner(sessionId, text) {
+            const border = '--------------------------------------------------';
+            appendLine(sessionId, border);
+            appendLine(sessionId, `| ${text.toUpperCase()} |`);
+            appendLine(sessionId, border);
+        }
+
+        function generateGenpass(sessionId) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+';
+            let password = '';
+            for (let i = 0; i < 12; i++) {
+                password += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            appendLine(sessionId, `Generated password: ${password}`);
+        }
+        
+        function printDateTime(sessionId) {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US');
+            const timeStr = now.toLocaleTimeString('en-US');
+            appendLine(sessionId, `Current Date: ${dateStr}`);
+            appendLine(sessionId, `Current Time: ${timeStr}`);
+        }
+
+        function printIPConfig(sessionId) {
+            appendLine(sessionId, 'Windows IP Configuration');
+            appendLine(sessionId, '');
+            appendLine(sessionId, 'Ethernet adapter Local Area Connection:');
+            appendLine(sessionId, `   Connection-specific DNS Suffix  . : localdomain`);
+            appendLine(sessionId, `   IPv4 Address. . . . . . . . . . . : 192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`);
+            appendLine(sessionId, `   Subnet Mask . . . . . . . . . . . : 255.255.255.0`);
+            appendLine(sessionId, `   Default Gateway . . . . . . . . . : 192.168.1.1`);
+        }
+
+        function startPing(sessionId, target) {
+            if (!target) {
+                appendLine(sessionId, 'Usage: ping <target-address>');
+                return;
+            }
+            
+            appendLine(sessionId, `Pinging ${target} with 32 bytes of data:`);
+            
+            let receivedCount = 0;
+            let minTime = 1000;
+            let maxTime = 0;
+            let totalTime = 0;
+
+            for (let i = 0; i < 4; i++) {
+                setTimeout(() => {
+                    const time = Math.floor(Math.random() * 90) + 10; 
+                    const ttl = Math.floor(Math.random() * 60) + 64;
+                    
+                    if (Math.random() < 0.25) { 
+                         appendLine(sessionId, 'Request timed out.');
+                    } else {
+                         appendLine(sessionId, `Reply from ${target}: bytes=32 time=${time}ms TTL=${ttl}`);
+                         receivedCount++;
+                         minTime = Math.min(minTime, time);
+                         maxTime = Math.max(maxTime, time);
+                         totalTime += time;
+                    }
+
+                    if (i === 3) {
+                        const loss = 4 - receivedCount;
+                        const lossPercent = (loss / 4 * 100);
+                        const avgTime = receivedCount > 0 ? Math.round(totalTime / receivedCount) : 0;
+                        
+                        appendLine(sessionId, '');
+                        appendLine(sessionId, `Ping statistics for ${target}:`);
+                        appendLine(sessionId, `    Packets: Sent = 4, Received = ${receivedCount}, Lost = ${loss} (${lossPercent}% loss),`);
+                        
+                        if (receivedCount > 0) {
+                            appendLine(sessionId, `Approximate round trip times in milli-seconds:`);
+                            appendLine(sessionId, `    Minimum = ${minTime}ms, Maximum = ${maxTime}ms, Average = ${avgTime}ms`);
+                        }
+                    }
+                }, 500 * (i + 1));
+            }
+        }
+
+        const hackMessages = [
+            "Scanning target ports...", "Checking for open ports...", "Port 22 (SSH) detected. Attempting brute-force...", "Port 80 (HTTP) detected. Looking for vulnerabilities...", "Port 443 (HTTPS) detected. Trying SSL/TLS downgrade attacks...", "Attempting login with common credentials...", "Login failed. Trying next combination...", "Establishing connection...", "Analyzing network traffic...", "Injecting payload...", "Bypassing firewall...", "Accessing data streams...", "Extracting user information...", "Executing remote command...", "Searching for backdoor entry...", "Encrypting data channel...", "Compiling exploit...", "Disabling security protocols...", "Analyzing server logs for weak points...", "Attempting buffer overflow on service X..."
+        ];
+
+        const errorMessages = [
+            "Connection refused.", "Authentication failed.", "Firewall detected. Attempting bypass...", "Exploit failed. Retrying...", "Target unresponsive. Retrying connection...", "Access denied.", "Too many login attempts. Waiting 5 seconds...", "Error: Invalid packet structure.", "Warning: IDS/IPS detected activity."
+        ];
+
+        function startHack(sessionId, target) {
+            const session = sessions[sessionId];
+            if (session.isHacking) {
+                appendLine(sessionId, 'A fake hacking sequence is already running.');
+                return;
+            }
+            if (!target) {
+                appendLine(sessionId, 'Usage: hack <name>');
+                return;
+            }
+            if (session.isTreeRunning || session.isRunProcessRunning) {
+                appendLine(sessionId, 'Error: Another process is currently running. Use "stop" to interrupt.');
+                return;
+            }
+
+
+            session.isHacking = true;
+            let progress = 0;
+            const progressLine = document.createElement('div');
+            progressLine.classList.add('terminal-line', 'hack-progress');
+            session.historyDiv.appendChild(progressLine);
+            session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            session.currentInputDiv.style.display = 'none'; 
+
+            session.hackInterval = setInterval(() => {
+                let outputMessage = '';
+                let outputClass = 'hack-info';
+
+                const randomAction = Math.random();
+
+                if (progress < 90 && randomAction < 0.7) { 
+                    outputMessage = hackMessages[Math.floor(Math.random() * hackMessages.length)];
+                    outputClass = 'hack-info';
+                    progress += Math.floor(Math.random() * 5) + 1; 
+                } else if (progress < 90 && randomAction < 0.9) { 
+                    outputMessage = `[ERROR] ${errorMessages[Math.floor(Math.random() * errorMessages.length)]}`;
+                    outputClass = 'hack-error';
+                    progress = Math.max(0, progress - Math.floor(Math.random() * 2)); 
+                } else { 
+                    outputMessage = `Successful breakthrough on ${target}!`;
+                    outputClass = 'hack-progress';
+                    progress += Math.floor(Math.random() * 10) + 5;
+                }
+                
+                progress = Math.min(100, progress); 
+
+                const newInfoLine = document.createElement('div');
+                newInfoLine.classList.add('terminal-line', outputClass);
+                newInfoLine.textContent = outputMessage;
+                session.historyDiv.insertBefore(newInfoLine, progressLine); 
+
+                progressLine.textContent = `Hacking ${target} [${progress}%]`;
+                
+                if (progress >= 100) {
+                    clearInterval(session.hackInterval);
+                    session.isHacking = false;
+                    session.hackInterval = null;
+                    progressLine.textContent = `Hacking ${target} [100%] Complete.`;
+                    appendLine(sessionId, `[SUCCESS] Fake hack on ${target} finished successfully. Access granted.`, 'hack-success');
+                    session.currentInputDiv.style.display = 'flex';
+                    session.inputElement.focus();
+                }
+                session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            }, 500); 
+        }
+
+        function setColor(sessionId, colorName) { 
+            const session = sessions[sessionId];
+            const lowerColor = colorName ? colorName.toLowerCase() : '';
+
+            if (themeMap[lowerColor]) {
+                let canonicalTheme = lowerColor.length === 1 ? Object.keys(themeMap).find(k => themeMap[k] === themeMap[lowerColor]) : lowerColor;
+                if (!canonicalTheme) return;
+
+                session.theme = canonicalTheme;
+                if (activeSessionId === sessionId) {
+                    document.body.className = themeMap[lowerColor];
+                }
+                appendLine(sessionId, `Color set to: ${canonicalTheme}`);
+            } else {
+                const availableThemes = Object.keys(themeMap).filter(k => k.length > 1).join(', ');
+                appendLine(sessionId, `Invalid color: ${colorName}. Available colors: ${availableThemes} (or use initials: w, g, a, c)`);
+            }
+        }
+        
+        function simulateExit() {
+            document.body.innerHTML = '<div class="black-screen"></div>';
+        }
+        
+        function startTreeSpam(sessionId) {
+            const session = sessions[sessionId];
+            if (session.isTreeRunning) {
+                appendLine(sessionId, 'Error: Tree spam is already running in this session.');
+                return;
+            }
+            if (session.isHacking || session.isRunProcessRunning) {
+                appendLine(sessionId, 'Error: Another process is currently running. Use "stop" to interrupt.');
+                return;
+            }
+            
+            session.isTreeRunning = true;
+            appendLine(sessionId, 'Starting directory tree scan... Press "stop" to interrupt.');
+            
+            const getRandomPath = () => {
+                const parts = ['C:', 'Users', 'System', 'Data', 'Logs', 'Backup', 'Temp', 'Config', 'Shared'];
+                let path = parts[Math.floor(Math.random() * parts.length)];
+                for (let i = 0; i < 3; i++) {
+                    if (Math.random() < 0.5) {
+                        path += '\\' + parts[Math.floor(Math.random() * parts.length)];
+                    }
+                }
+                return path + '\\';
+            };
+
+            session.treeInterval = setInterval(() => {
+                const currentPath = getRandomPath();
+                const errorMessage = `Permission denied: access to path ${currentPath} denied.`;
+                appendLine(sessionId, errorMessage, 'tree-error');
+            }, 10); 
+            
+            session.currentInputDiv.style.display = 'none';
+        }
+
+        const runSequence = [
+            { msg: 'Initializing Core Components...', class: 'run-init', chance: 1.0 },
+            { msg: '[OK] Kernel modules loaded.', class: 'run-ok', chance: 1.0 },
+            { msg: 'Checking File System Integrity...', class: 'run-init', chance: 1.0 },
+            { msg: '[OK] File System clean.', class: 'run-ok', chance: 0.95 },
+            { msg: '[FAIL] Corrupted System Cache detected. Repairing...', class: 'run-fail', chance: 0.05 },
+            { msg: 'Starting Network Services...', class: 'run-init', chance: 1.0 },
+            { msg: '[OK] DHCP service active.', class: 'run-ok', chance: 1.0 },
+            { msg: '[FAIL] Connection to Primary DNS failed. Using Secondary.', class: 'run-fail', chance: 0.15 },
+            { msg: 'Loading System UI...', class: 'run-init', chance: 1.0 },
+            { msg: '[OK] Graphical Environment ready.', class: 'run-ok', chance: 1.0 },
+            { msg: 'System initialization complete.', class: 'run-init', chance: 1.0 }
+        ];
+
+        function startRunProcess(sessionId) {
+            const session = sessions[sessionId];
+            if (session.isRunProcessRunning) {
+                appendLine(sessionId, 'Error: System initialization is already running.');
+                return;
+            }
+            if (session.isHacking || session.isTreeRunning) {
+                appendLine(sessionId, 'Error: Another process is currently running. Use "stop" to interrupt.');
+                return;
+            }
+            
+            session.isRunProcessRunning = true;
+            let step = 0;
+            
+            appendLine(sessionId, 'System initialization started. Press "stop" to interrupt.');
+            session.currentInputDiv.style.display = 'none'; 
+
+            session.runInterval = setInterval(() => {
+                if (step >= runSequence.length) {
+                    stopRunProcess(sessionId, true);
+                    return;
+                }
+                
+                const item = runSequence[step];
+                
+                if (Math.random() < item.chance) {
+                     appendLine(sessionId, item.msg, item.class);
+                } else {
+                    if (item.class === 'run-ok' && step + 1 < runSequence.length) {
+                        const nextItem = runSequence[step + 1];
+                        if (nextItem.class === 'run-fail') {
+                            appendLine(sessionId, nextItem.msg, nextItem.class);
+                            step++; 
+                        }
+                    }
+                }
+                
+                step++;
+                session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            }, 800);
+        }
+
+        function stopRunProcess(sessionId, isComplete = false) {
+            const session = sessions[sessionId];
+            if (!session.isRunProcessRunning) return;
+
+            clearInterval(session.runInterval);
+            session.isRunProcessRunning = false;
+            session.runInterval = null;
+            
+            session.currentInputDiv.style.display = 'flex';
+            session.inputElement.focus();
+
+            if (!isComplete) {
+                appendLine(sessionId, 'Process **RUN** interrupted by user.', 'run-fail');
+            } else {
+                appendLine(sessionId, 'System is now fully operational.', 'run-ok');
+            }
+        }
+
+        function stopTreeSpam(sessionId) {
+            const session = sessions[sessionId];
+            if (!session.isTreeRunning) return;
+
+            clearInterval(session.treeInterval);
+            session.isTreeRunning = false;
+            session.treeInterval = null;
+            
+            session.currentInputDiv.style.display = 'flex';
+            session.inputElement.focus();
+            appendLine(sessionId, 'Process **TREE** interrupted by user.', 'tree-error');
+        }
+
+        function stopHack(sessionId) {
+            const session = sessions[sessionId];
+            if (!session.isHacking) return;
+            
+            clearInterval(session.hackInterval);
+            session.isHacking = false;
+            session.hackInterval = null;
+            
+            session.currentInputDiv.style.display = 'flex';
+            session.inputElement.focus();
+            appendLine(sessionId, 'Process **HACK** interrupted by user.', 'hack-error');
+        }
+        
+        function stopInstall(sessionId) {
+            const session = sessions[sessionId];
+            if (!session.isRunProcessRunning) return; 
+            
+            clearInterval(session.runInterval);
+            session.isRunProcessRunning = false;
+            session.runInterval = null;
+            
+            session.currentInputDiv.style.display = 'flex';
+            session.inputElement.focus();
+            appendLine(sessionId, 'Process **INSTALL** interrupted by user.', 'install-fail');
+        }
+
+        function stopAnyProcess(sessionId) {
+            const session = sessions[sessionId];
+            
+            if (session.isHacking) {
+                stopHack(sessionId);
+            } else if (session.isTreeRunning) {
+                stopTreeSpam(sessionId);
+            } else if (session.isRunProcessRunning) { 
+                stopInstall(sessionId); 
+            } else {
+                appendLine(sessionId, 'No long-running processes detected to stop.');
+            }
+        }
+        
+        const commonPorts = [21, 22, 23, 25, 53, 80, 110, 143, 443, 3389, 8080];
+        
+        function startScan(sessionId, target) {
+            const session = sessions[sessionId];
+            if (session.isHacking || session.isTreeRunning || session.isRunProcessRunning) {
+                appendLine(sessionId, 'Error: Another process is currently running. Use "stop" to interrupt.');
+                return;
+            }
+            if (!target) {
+                appendLine(sessionId, 'Usage: scan <target-address>');
+                return;
+            }
+            
+            let portsToScan = [...commonPorts];
+            let portsScanned = 0;
+            const scanIntervalDelay = 200;
+            
+            appendLine(sessionId, `Starting port scan on ${target}... Press "stop" to interrupt.`);
+            session.currentInputDiv.style.display = 'none';
+            
+            session.isHacking = true; 
+            
+            session.hackInterval = setInterval(() => {
+                if (portsScanned >= portsToScan.length) {
+                    clearInterval(session.hackInterval);
+                    session.isHacking = false;
+                    session.currentInputDiv.style.display = 'flex';
+                    appendLine(sessionId, `Scan of ${target} complete. Found ${Math.floor(Math.random() * 5) + 2} open ports.`, 'hack-success');
+                    return;
+                }
+                
+                const port = portsToScan[portsScanned];
+                
+                if (Math.random() < 0.3) {
+                    appendLine(sessionId, `[${port}/tcp] -> OPEN (Service: ${getServiceName(port)})`, 'scan-open');
+                } else {
+                    appendLine(sessionId, `[${port}/tcp] -> CLOSED`, 'scan-closed');
+                }
+                
+                portsScanned++;
+                session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            }, scanIntervalDelay);
+        }
+
+        function getServiceName(port) {
+            switch (port) {
+                case 21: return 'FTP';
+                case 22: return 'SSH';
+                case 23: return 'Telnet';
+                case 25: return 'SMTP';
+                case 53: return 'DNS';
+                case 80: return 'HTTP';
+                case 110: return 'POP3';
+                case 143: return 'IMAP';
+                case 443: return 'HTTPS';
+                case 3389: return 'RDP';
+                case 8080: return 'HTTP-Proxy';
+                default: return 'Unknown';
+            }
+        }
+
+        function startInstallUUI(sessionId, target) {
+            const session = sessions[sessionId];
+
+            if (session.isRunProcessRunning || session.isHacking || session.isTreeRunning) {
+                appendLine(sessionId, 'Error: Another process is currently running. Use "stop" to interrupt.');
+                return;
+            }
+            if (target !== 'uuibeta.qcom') {
+                appendLine(sessionId, `Error: Invalid installation target. Usage: command install <net file> (e.g., uuibeta.qcom)`);
+                return;
+            }
+            
+            session.isRunProcessRunning = true; 
+            let progress = 0;
+            const totalSteps = 8;
+            const progressLine = document.createElement('div');
+            progressLine.classList.add('terminal-line', 'install-info');
+            session.historyDiv.appendChild(progressLine);
+            session.currentInputDiv.style.display = 'none';
+
+            appendLine(sessionId, `Starting installation of **${target}**...`, 'install-info');
+            
+            session.runInterval = setInterval(() => {
+                if (progress >= totalSteps) {
+                    clearInterval(session.runInterval);
+                    session.isRunProcessRunning = false;
+                    session.runInterval = null;
+                    session.isUUIInstalled = true;
+                    progressLine.textContent = `Installation of ${target} completed successfully! [100%]`;
+                    appendLine(sessionId, 'UUI system installed. Ready for netboot setup.', 'install-success');
+                    session.currentInputDiv.style.display = 'flex';
+                    session.inputElement.focus();
+                    return;
+                }
+                
+                progress++;
+                const percent = Math.floor((progress / totalSteps) * 100);
+                
+                switch (progress) {
+                    case 1:
+                        progressLine.textContent = `[${percent}%] Verifying integrity of source files...`;
+                        break;
+                    case 2:
+                        progressLine.textContent = `[${percent}%] Initializing partition C:\\UUISystem...`;
+                        break;
+                    case 3:
+                        progressLine.textContent = `[${percent}%] Copying core kernel files...`;
+                        break;
+                    case 4:
+                        progressLine.textContent = `[${percent}%] Installing essential drivers...`;
+                        break;
+                    case 5:
+                        progressLine.textContent = `[${percent}%] Configuring network stack...`;
+                        break;
+                    case 6:
+                        progressLine.textContent = `[${percent}%] Setting up user environment...`;
+                        break;
+                    case 7:
+                        progressLine.textContent = `[${percent}%] Finalizing system configuration...`;
+                        break;
+                    case 8:
+                        progressLine.textContent = `[${percent}%] Creating system boot entry...`;
+                        break;
+                }
+                session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            }, 1000); 
+        }
+
+        function setNetbootReady(sessionId) {
+            const session = sessions[sessionId];
+
+            if (!session.isUUIInstalled) {
+                appendLine(sessionId, 'Error: UUI system not installed. Run "command install uuibeta.qcom" first.', 'install-fail');
+                return;
+            }
+
+            session.isNetbootReady = true;
+            appendLine(sessionId, '[STATUS] Netboot environment is ready. Awaiting kernel injection.', 'netboot-info');
+        }
+
+        function injectUUIKernel(sessionId) {
+            const session = sessions[sessionId];
+
+            if (!session.isNetbootReady) {
+                appendLine(sessionId, 'Error: Netboot not ready. Run "netboot ready" first.', 'install-fail');
+                return;
+            }
+            if (!session.isUUIInstalled) {
+                 appendLine(sessionId, 'Error: Kernel file not found. Run "command install uuibeta.qcom" first.', 'install-fail');
+                return;
+            }
+
+
+            session.isKernelInjected = true;
+            appendLine(sessionId, `[STATUS] **uuikernel** injected successfully. System ready for boot.`, 'inject-info');
+        }
+        
+        const uuiBootSequence = [
+            '*** UUI Kernel v1.0.0 ***',
+            'Searching for boot device...',
+            'Found **uui.qcom** on C:\\UUISystem.',
+            'Loading bootloader...',
+            '[BOOT] Initializing core modules.',
+            '[BOOT] Checking memory integrity (4096MB OK).',
+            '[BOOT] Starting file system checks.',
+            '[BOOT] System services starting...',
+            '[BOOT] Launching UUI shell...',
+            'Redirecting to UUI system interface...'
+        ];
+
+        function startRunUUI(sessionId) {
+    const session = sessions[sessionId];
+
+    if (!session.isKernelInjected) {
+        appendLine(sessionId, 'Error: Kernel not injected. Run **command install uuibeta.qcom**, **netboot ready**, and **inject uuikernel** first.', 'install-fail');
+        return;
+    }
+    
+    session.isRunProcessRunning = true;
+    let step = 0;
+    
+    session.currentInputDiv.style.display = 'none';
+
+    session.runInterval = setInterval(() => {
+        if (step >= uuiBootSequence.length) {
+            clearInterval(session.runInterval);
+            session.isRunProcessRunning = false;
+            
+            appendLine(sessionId, 'System boot complete. Redirecting to UUI Interface in 4 seconds...', 'install-success');
+
+            setTimeout(() => {
+                window.location.href = 'https://sites.google.com/view/uuiemulator/h';
+            }, 4000); 
+            
+            session.currentInputDiv.style.display = 'flex';
+            session.inputElement.focus();
+            
+            session.contentEl.scrollTop = session.contentEl.scrollHeight;
+            
+            return;
+        }
+        
+        appendLine(sessionId, uuiBootSequence[step], 'uui-boot');
+        
+        step++;
+        session.contentEl.scrollTop = session.contentEl.scrollHeight;
+    }, 400); 
+}
+
+        document.getElementById('tab-add').addEventListener('click', createNewSession);
+
+        createNewSession();
+
+        if (activeSessionId !== null) {
+             document.body.className = themeMap[sessions[activeSessionId].theme] || 'theme-white';
+        }
+
+    </script>
+</body>
+</html>
